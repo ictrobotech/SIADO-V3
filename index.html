@@ -9,7 +9,9 @@
   <meta name="theme-color" content="#0f172a" />
   <meta name="robots" content="noindex" />
 
-  <link rel="shortcut icon" href="LGS.png" type="image/png" />
+  <!-- Ikon aplikasi di tab browser. LGS.png harus berada di folder yang sama. -->
+  <link rel="icon" type="image/png" href="LGS.png" />
+  <link rel="shortcut icon" type="image/png" href="LGS.png" />
   <link rel="apple-touch-icon" href="LGS.png" />
 
   <style>
@@ -39,8 +41,10 @@
       position: fixed;
       inset: 0;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
+      gap: 18px;
       background: #0f172a;
       color: #e2e8f0;
       font: 500 15px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -50,10 +54,23 @@
       transition: opacity .4s ease;
     }
     #memuat.sembunyi { opacity: 0; pointer-events: none; }
+    #memuat img { width: 72px; height: 72px; border-radius: 12px; }
+    .putar {
+      width: 26px; height: 26px;
+      border: 3px solid rgba(226,232,240,.25);
+      border-top-color: #e2e8f0;
+      border-radius: 50%;
+      animation: putar 1s linear infinite;
+    }
+    @keyframes putar { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
-  <div id="memuat">Memuat aplikasi&hellip;</div>
+  <div id="memuat">
+    <img src="LGS.png" alt="Logo SMP Labschool Untad Palu" />
+    <div class="putar"></div>
+    <div id="pesanMuat">Memuat aplikasi&hellip;</div>
+  </div>
 
   <div class="iframe-container">
     <iframe
@@ -72,15 +89,23 @@
       // ================================================================
       // Ganti baris ini bila Deploy menghasilkan URL /exec yang baru.
       // ================================================================
-      var URL_APLIKASI = 'https://script.google.com/macros/s/AKfycbwwhpiEnkXGFZufTFD8CwIUJLhvYZXiEQY9M-fsrkhecOJpkOO2eQ2A3d12lvu3-38X7w/exec';
+      var URL_APLIKASI = 'https://script.google.com/macros/s/AKfycby1z_nbb7b5W_-MoOiKSaq-aXqk_052FPZvXSKsiXdGcZsc-aBm2l0ieq9i1o3HX7x2LA/exec';
 
       var bingkai = document.getElementById('app');
-      var pesan = document.getElementById('memuat');
+      var tirai = document.getElementById('memuat');
+      var pesan = document.getElementById('pesanMuat');
 
-      // Meneruskan ?page=admin agar alamat .../?page=admin membuka panel
-      // guru/proktor langsung, tanpa melewati layar login peserta.
-      var halaman = new URLSearchParams(window.location.search).get('page');
-      var tujuan = (halaman === 'admin') ? (URL_APLIKASI + '?page=admin') : URL_APLIKASI;
+      var params = new URLSearchParams(window.location.search);
+      var halaman = params.get('page');
+      var kode = params.get('hs'); // kode sesi sekali pakai dari login panel
+
+      // Meneruskan page dan hs ke aplikasi di dalam bingkai, sehingga panel
+      // guru/proktor terbuka langsung tanpa diminta login untuk kedua kalinya.
+      var tujuan = URL_APLIKASI;
+      var tambahan = [];
+      if (halaman === 'admin') tambahan.push('page=admin');
+      if (kode) tambahan.push('hs=' + encodeURIComponent(kode));
+      if (tambahan.length) tujuan += '?' + tambahan.join('&');
 
       if (halaman === 'admin') {
         document.title = 'Panel Pengelolaan | SIADO V3';
@@ -89,9 +114,17 @@
 
       bingkai.src = tujuan;
 
-      function selesai() { pesan.classList.add('sembunyi'); }
+      // Kode sesi dihapus dari kolom alamat agar tidak tersalin atau terpakai ulang.
+      if (kode && window.history && window.history.replaceState) {
+        params.delete('hs');
+        var sisa = params.toString();
+        window.history.replaceState({}, document.title,
+          window.location.pathname + (sisa ? '?' + sisa : ''));
+      }
+
+      function selesai() { tirai.classList.add('sembunyi'); }
       bingkai.addEventListener('load', selesai);
-      window.setTimeout(selesai, 8000); // jaring pengaman
+      window.setTimeout(selesai, 10000); // jaring pengaman
     })();
   </script>
 </body>
