@@ -2,23 +2,29 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>SIADO V3</title>
+
+  <meta name="description" content="Aplikasi Ujian Online SMP Labschool Untad Palu." />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="robots" content="noindex" />
+
   <link rel="shortcut icon" href="LGS.png" type="image/png" />
-<link rel="apple-touch-icon" href="LGS.png" />
+  <link rel="apple-touch-icon" href="LGS.png" />
+
   <style>
     html, body {
       margin: 0;
       padding: 0;
       width: 100%;
       height: 100%;
-      background-color: #eee;
+      background-color: #0f172a;
       overflow: hidden; /* Mencegah scroll ganda */
     }
 
     .iframe-container {
-      width: 100%;
-      height: 100dvh; /* Menggunakan dvh agar pas di mobile browser */
+      position: fixed;
+      inset: 0;
       overflow: hidden;
     }
 
@@ -28,18 +34,65 @@
       height: 100%;
       border: none;
     }
+
+    #memuat {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0f172a;
+      color: #e2e8f0;
+      font: 500 15px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      text-align: center;
+      padding: 24px;
+      z-index: 2;
+      transition: opacity .4s ease;
+    }
+    #memuat.sembunyi { opacity: 0; pointer-events: none; }
   </style>
 </head>
 <body>
+  <div id="memuat">Memuat aplikasi&hellip;</div>
+
   <div class="iframe-container">
     <iframe
       id="app"
-      src="https://script.google.com/macros/s/AKfycbwrNhzvCImsXtwlIWIOgIY8Udd6ZH09IouK5qVJcGE3eUKsN3nTwsKidhD2MGIK1_QvhQ/exec"
-  scrolling="yes"
-  allowfullscreen
-  allow="fullscreen; camera; microphone; display-capture; geolocation;"
-  sandbox="allow-scripts allow-forms allow-same-origin allow-popups">
+      title="Aplikasi Ujian Online"
+      scrolling="yes"
+      allowfullscreen
+      webkitallowfullscreen="true"
+      mozallowfullscreen="true"
+      allow="fullscreen; camera; microphone; display-capture; geolocation; clipboard-read; clipboard-write">
     </iframe>
   </div>
+
+  <script>
+    (function () {
+      // ================================================================
+      // Ganti baris ini bila Deploy menghasilkan URL /exec yang baru.
+      // ================================================================
+      var URL_APLIKASI = 'https://script.google.com/macros/s/AKfycbwrNhzvCImsXtwlIWIOgIY8Udd6ZH09IouK5qVJcGE3eUKsN3nTwsKidhD2MGIK1_QvhQ/exec';
+
+      var bingkai = document.getElementById('app');
+      var pesan = document.getElementById('memuat');
+
+      // Meneruskan ?page=admin agar alamat .../?page=admin membuka panel
+      // guru/proktor langsung, tanpa melewati layar login peserta.
+      var halaman = new URLSearchParams(window.location.search).get('page');
+      var tujuan = (halaman === 'admin') ? (URL_APLIKASI + '?page=admin') : URL_APLIKASI;
+
+      if (halaman === 'admin') {
+        document.title = 'Panel Pengelolaan | SIADO V3';
+        pesan.textContent = 'Memuat panel pengelolaan\u2026';
+      }
+
+      bingkai.src = tujuan;
+
+      function selesai() { pesan.classList.add('sembunyi'); }
+      bingkai.addEventListener('load', selesai);
+      window.setTimeout(selesai, 8000); // jaring pengaman
+    })();
+  </script>
 </body>
 </html>
