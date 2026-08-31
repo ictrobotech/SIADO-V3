@@ -392,6 +392,10 @@ function bindAdminInterface() {
   document.getElementById('addQuestionForm').addEventListener('submit', function(event) { event.preventDefault(); saveNewQuestion(); });
   document.getElementById('editQuestionForm').addEventListener('submit', function(event) { event.preventDefault(); saveEditedQuestion(); });
   document.getElementById('btnTerapkanDurasi').addEventListener('click', terapkanDurasiRealtime);
+  var btnResetSatu = document.getElementById('btnResetWaktuPeserta');
+  if (btnResetSatu) btnResetSatu.addEventListener('click', resetWaktuSatuPeserta_);
+  var btnResetSemua = document.getElementById('btnResetWaktuSemua');
+  if (btnResetSemua) btnResetSemua.addEventListener('click', resetWaktuSemuaPeserta_);
   var btnTema = document.getElementById('btnSimpanTema');
   if (btnTema) btnTema.addEventListener('click', simpanTemaAdmin_);
   document.getElementById('closeEditModal').addEventListener('click', closeEditQuestion);
@@ -994,7 +998,7 @@ function switchAdminTab(tab) {
   if (tab === 'hasil') loadResults();
   if (tab === 'uraian') loadEssays();
   if (tab === 'rekap') loadRecap();
-  if (tab === 'peserta') loadParticipants();
+  if (tab === 'peserta') loadParticipants(true);
   if (tab === 'pengguna') loadTeachers();
   if (tab === 'notifikasi') loadNotifications();
   if (tab === 'pengaturan') { loadSettings(); muatDaftarPesertaDurasi_(); }
@@ -1751,6 +1755,49 @@ async function terapkanDurasiRealtime() {
     }
   } catch (error) {
     await hasilGagal_('Gagal Mengubah Durasi', error.message || 'Durasi gagal diubah.');
+  }
+}
+
+/** Reset waktu SATU peserta yang dipilih ke durasi penuh ujiannya. */
+async function resetWaktuSatuPeserta_() {
+  var pilih = document.getElementById('sPesertaDurasi');
+  if (!pilih || !pilih.value) {
+    showToast('Pilih peserta terlebih dahulu pada dropdown di atas.', 'error');
+    return;
+  }
+  var sessionId = pilih.value;
+  var peserta = (DATA_MENTAH.monitor || []).filter(function(p) { return String(p.session_id) === sessionId; })[0];
+  var nama = (peserta && peserta.nama) || 'peserta terpilih';
+    var setuju = await konfirmasi_(
+    'Sisa waktu ' + nama + ' akan dikembalikan ke durasi default pengaturan ujian. Lanjutkan?',
+    { judul: 'Reset Waktu Peserta', nada: 'danger', teksOk: 'Ya, Reset Waktu' });
+  if (!setuju) return;
+  try {
+    var result = await apiWajib_('resetWaktuPeserta', { sessionId: sessionId });
+    await segarkanSenyap_([loadMonitor]);
+    await hasilSukses_('Waktu Peserta Di-Reset', result.message || 'Waktu peserta dikembalikan ke durasi default pengaturan.', [
+      { label: 'Peserta', nilai: (result.namaPeserta || nama) + (result.kelasPeserta ? ' — ' + result.kelasPeserta : '') },
+      { label: 'Durasi default', nilai: (result.menit || 0) + ' menit' }
+    ]);
+  } catch (error) {
+    await hasilGagal_('Reset Waktu Gagal', error.message || 'Reset waktu gagal dilakukan.');
+  }
+}
+
+/** Reset waktu SEMUA peserta aktif milik akun ini ke durasi penuh masing-masing. */
+async function resetWaktuSemuaPeserta_() {
+  var setuju = await konfirmasi_(
+    'Sisa waktu SEMUA peserta aktif akan dikembalikan ke durasi default pengaturan masing-masing ujian. Lanjutkan?',
+    { judul: 'Reset Waktu Semua Peserta', nada: 'danger', teksOk: 'Ya, Reset Semua' });
+  if (!setuju) return;
+  try {
+    var result = await apiWajib_('resetWaktuSemua', {});
+    await segarkanSenyap_([loadMonitor]);
+    await hasilSukses_('Waktu Semua Peserta Di-Reset', result.message || 'Waktu semua peserta dikembalikan.', [
+      { label: 'Jumlah peserta', nilai: String(result.jumlahSesi || 0) }
+    ]);
+  } catch (error) {
+    await hasilGagal_('Reset Waktu Gagal', error.message || 'Reset waktu semua peserta gagal dilakukan.');
   }
 }
 
@@ -3260,12 +3307,25 @@ async function deleteTeacher(username) {
 /* ==================================================================
  * DATA PESERTA DAN ROMBEL
  * ================================================================== */
-async function loadParticipants() {
-  if (!ADMIN.token || ADMIN.refreshBusy.peserta) return;
+/**
+ * Memuat data peserta + rombel.
+ *
+ * paksa=true dipakai saat masuk ke tab Data Peserta: bila masih ada
+ * permintaan sebelumnya yang berjalan, permintaan baru diantrekan
+ * (pesertaReloadQueued) dan dijalankan begitu yang lama selesai — jadi
+ * kembali ke tab ini TIDAK akan macet di "Memuat data peserta...".
+ */
+async function loadParticipants(paksa) {
+  if (!ADMIN.token) return;
+  if (ADMIN.refreshBusy.peserta) {
+    if (paksa) ADMIN.pesertaReloadQueued = true;
+    return;
+  }
   ADMIN.refreshBusy.peserta = true;
+  var rombelDipilih = document.getElementById('filterPesertaRombel').value;
   try {
-    var result = await adminApi('getDataPeserta', { rombel: document.getElementById('filterPesertaRombel').value });
-    if (!guardAdminResult(result)) return;
+    var result = await adminApi('getDataPeserta', { rombel: rombelDipilih });
+    if (!guardAdminResult(result)) throw new Error((result && result.message) || 'Data peserta gagal dimuat.');
     ADMIN.participants = result.data || [];
     ADMIN.rombel = result.rombel || [];
     DATA_MENTAH.peserta = ADMIN.participants;
@@ -3273,8 +3333,22 @@ async function loadParticipants() {
     isiPilihanRombelAdmin_(ADMIN.rombel);
     terapkanFilterPeserta_();
   } catch (error) {
-    setTableMessage('participantTable', 'Data peserta gagal dimuat.', 'fa-triangle-exclamation');
-  } finally { ADMIN.refreshBusy.peserta = false; }
+    // Jangan menghapus data yang sudah tampil: bila ada data lama, tampilkan
+    // itu + toast; "gagal memuat" hanya muncul bila belum ada data sama sekali.
+    if (!ADMIN.participants || !ADMIN.participants.length) {
+      setTableMessage('participantTable',
+        (error && error.message) || 'Data peserta gagal dimuat. Tekan Refresh untuk mencoba lagi.',
+        'fa-triangle-exclamation');
+    } else {
+      showToast('Data peserta gagal dimuat. Menampilkan data terakhir.', 'error');
+    }
+  } finally {
+    ADMIN.refreshBusy.peserta = false;
+    if (ADMIN.pesertaReloadQueued) {
+      ADMIN.pesertaReloadQueued = false;
+      loadParticipants(true);
+    }
+  }
 }
 
 function isiPilihanRombelAdmin_(rombel) {
@@ -4293,4 +4367,4 @@ function escapeAdmin(value) { return String(value === undefined || value === nul
 function readFileAsDataUrl(file) { return new Promise(function(resolve, reject) { var reader = new FileReader(); reader.onload = function() { resolve(reader.result); }; reader.onerror = reject; reader.readAsDataURL(file); }); }
 function debounce(fn, wait) { var timeout; return function() { var args = arguments; clearTimeout(timeout); timeout = setTimeout(function() { fn.apply(null, args); }, wait); }; }
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33dcf36bd5620bb',t:'MTc4ODE5NzkxMg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v3d52b47920f24c319d37e2661827c42b1787588026925" integrity="sha512-d9sL6GJLXn6fInD1+TVXhTcQOsmxeHfmHAvwGDIxp5TO+uo1fiWW7mHomMj4MLRlCsJDTqXzWLHJFFlPCEIj/A==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33e771b0b15ce57',t:'MTc4ODIwNDc4OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
