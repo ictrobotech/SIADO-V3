@@ -82,17 +82,22 @@ function adminApi(action, payload) {
   var data = payload || {};
   data.action = action;
   if (ADMIN.token) data.adminToken = ADMIN.token;
+  // getDataPeserta boleh menunggu lebih lama: request pertama setelah jeda
+  // bisa memuat validasi skema + pembacaan data (terukur ~11 dtk di sisi
+  // server); aksi lain tetap 30 dtk agar kegagalan cepat terdeteksi.
+  var batasMs = (action === 'getDataPeserta') ? 60000 : 30000;
   return new Promise(function(resolve, reject) {
     var selesai = false;
+    var tMulai = Date.now();
     // Google Apps Script tidak pernah memanggil handler bila koneksi terputus,
     // sehingga Promise dapat menggantung selamanya. Batas waktu ini membuat
     // kegagalan tampil apa adanya, bukan sebagai pesan umum tanpa sebab.
     var batas = window.setTimeout(function() {
       if (selesai) return;
       selesai = true;
-      reject(new Error('Server tidak merespons untuk "' + action +
-        '". Periksa koneksi internet, lalu muat ulang halaman. Data mungkin sudah tersimpan.'));
-    }, 30000);
+      reject(new Error('Server tidak merespons untuk "' + action + '" setelah ' +
+        Math.round((Date.now() - tMulai) / 1000) + ' dtk. Periksa koneksi internet, lalu muat ulang halaman. Data mungkin sudah tersimpan.'));
+    }, batasMs);
 
     google.script.run
       .withSuccessHandler(function(hasil) {
@@ -4394,4 +4399,4 @@ function escapeAdmin(value) { return String(value === undefined || value === nul
 function readFileAsDataUrl(file) { return new Promise(function(resolve, reject) { var reader = new FileReader(); reader.onload = function() { resolve(reader.result); }; reader.onerror = reject; reader.readAsDataURL(file); }); }
 function debounce(fn, wait) { var timeout; return function() { var args = arguments; clearTimeout(timeout); timeout = setTimeout(function() { fn.apply(null, args); }, wait); }; }
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33eead26e13fd03',t:'MTc4ODIwOTUyOA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33f0e0628129cc5',t:'MTc4ODIxMDk3MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
