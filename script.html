@@ -126,12 +126,25 @@ function credentialSesi() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+  // Terapkan tema tersimpan secepatnya agar tidak berkedip, lalu server
+  // menegaskan tema resmi lewat loadPublicConfig.
+  try {
+    var temaTersimpan = localStorage.getItem('siado_tema');
+    if (temaTersimpan) document.documentElement.setAttribute('data-theme', temaTersimpan);
+  } catch (error) {}
   bindInterface();
   bindSecurityEvents();
   loadPublicConfig();
   startBrandingSync_();
   tryRestoreSession();
 });
+
+/** Menerapkan tema tampilan (5 tema profesional, diatur admin di panel). */
+function terapkanTema_(tema) {
+  var t = String(tema || 'navy').toLowerCase();
+  try { localStorage.setItem('siado_tema', t); } catch (error) {}
+  document.documentElement.setAttribute('data-theme', t);
+}
 
 function bindInterface() {
   document.getElementById('loginForm').addEventListener('submit', function(event) {
@@ -147,25 +160,9 @@ function bindInterface() {
     terapkanModeLogin_();
   }
 
-  // Username peserta wajib huruf kecil tanpa spasi. Pada mode panel tidak
-  // difilter karena username akun panel boleh memiliki format berbeda.
-  var inputUsername = document.getElementById('usernamePeserta');
-  if (inputUsername) {
-    inputUsername.addEventListener('input', function() {
-      if (modePanelAktif_()) return;
-      var sebelum = this.value;
-      var sesudah = sebelum.toLowerCase().replace(/[^a-z0-9.]/g, '');
-      if (sebelum === sesudah) return;
-      var posisi = this.selectionStart - (sebelum.length - sesudah.length);
-      this.value = sesudah;
-      try { this.setSelectionRange(Math.max(0, posisi), Math.max(0, posisi)); } catch (error) {}
-      if (/\s/.test(sebelum)) {
-        setLoginMessage('Username peserta ditulis tanpa spasi. Contoh: ahmad atau m.andi.', 'error');
-      } else if (/[A-Z]/.test(sebelum)) {
-        setLoginMessage('Username peserta otomatis diubah menjadi huruf kecil.', 'error');
-      }
-    });
-  }
+  // Revisi 6: username TIDAK lagi dikoreksi otomatis. Peserta wajib mengetik
+  // persis username yang didaftarkan admin/guru; bila salah, server memberi
+  // notifikasi generik dan kolom dikosongkan (tidak membocorkan username).
 
   document.getElementById('togglePassword').addEventListener('click', function() {
     var input = document.getElementById('passwordPeserta');
@@ -235,6 +232,7 @@ async function loadPublicConfig() {
     isiPilihanUjian_(UJIAN.daftarUjian, '');
     applyBrandingData_(result.branding);
     applyLoginBackground_(result.loginBackground);
+    terapkanTema_(result.tema);
   } catch (error) {
     console.warn('Konfigurasi publik gagal dibaca:', error);
   }
@@ -311,15 +309,7 @@ async function loginPeserta() {
     return;
   }
 
-  // Peserta wajib memakai nama depan terdaftar: huruf kecil, tanpa spasi.
   if (!modePanelAktif_()) {
-    var bersih = username.toLowerCase().replace(/[^a-z0-9.]/g, '');
-    if (username !== bersih) {
-      document.getElementById('usernamePeserta').value = bersih;
-      setLoginMessage('Username peserta harus huruf kecil tanpa spasi. Sudah diperbaiki menjadi "' +
-        bersih + '". Periksa lalu tekan Mulai Ujian lagi.', 'error');
-      return;
-    }
     if (!document.getElementById('kelasPeserta').value.trim()) {
       setLoginMessage('Pilih rombel/kelas Anda terlebih dahulu.', 'error');
       return;
@@ -363,9 +353,11 @@ async function loginPeserta() {
         tampilDiskualifikasi();
       } else {
         setLoginMessage(result.message || 'Login gagal.', 'error');
-        if (result.pilihRombel && result.pilihRombel.length) {
-          isiPilihanRombel_(result.pilihRombel, kelas);
-        }
+        // Revisi 6: bila kredensial salah, kolom dikosongkan kembali (default)
+        // dan tidak ada petunjuk username/password yang benar.
+        document.getElementById('usernamePeserta').value = '';
+        document.getElementById('passwordPeserta').value = '';
+        try { document.getElementById('usernamePeserta').focus(); } catch (error) {}
         // Daftar ujian bisa berubah saat guru membuka/menutup ujiannya.
         if (result.daftarUjian) {
           isiPilihanUjian_(result.daftarUjian, (document.getElementById('ujianPeserta') || {}).value || '');
@@ -512,9 +504,9 @@ function terapkanModeLogin_() {
     tombol: 'Masuk Panel',
     catatan: 'Sesi panel terenkripsi dan tercatat pada log audit.'
   } : {
-    intro: 'Masukkan nama depan, rombel, dan token ujian dari pengawas untuk memulai ujian.',
-    usernamePlaceholder: 'Nama depan Anda',
-    usernameHint: 'Gunakan <b>nama depan</b> sesuai data dari pengawas: <b>huruf kecil, tanpa spasi</b>. Contoh: <b>ahmad</b> atau <b>m.andi</b>.',
+    intro: 'Masukkan username, rombel, dan token ujian dari pengawas untuk memulai ujian.',
+    usernamePlaceholder: 'Masukkan username Anda',
+    usernameHint: 'Isi <b>username</b> yang diberikan guru/pengawas: <b>huruf kecil, tanpa spasi, tanpa titik</b> (angka dan simbol <b>_</b> / <b>-</b> boleh).',
     passwordLabel: 'Token ujian',
     passwordPlaceholder: 'Token ujian dari pengawas',
     tombol: 'Mulai Ujian',
@@ -790,6 +782,11 @@ function terapkanPayloadUjian(result, initial) {
   if (replaceQuestions) {
     renderNavigation();
     renderQuestion();
+    // Revisi 6: guru mengubah soal/opsi jawaban -> peserta menerima versi baru
+    // pada sinkronisasi berikutnya (<=10 dtk) dan langsung diberi tahu.
+    if (!initial && UJIAN.aktif && !UJIAN.jeda) {
+      tampilkanToastPeserta_('Soal diperbarui oleh guru. Perubahan langsung tampil.', false);
+    }
   }
   updateTimerUI();
 }
@@ -2096,4 +2093,4 @@ function urlGambarTampil_(url, lebar) {
   return 'https://drive.google.com/thumbnail?id=' + id + '&sz=w' + (lebar || 1600);
 }
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33d4803ccfa8401',t:'MTc4ODE5MjM3NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33e034348f4fd07',t:'MTc4ODIwMDA0NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
