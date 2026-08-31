@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>SIADO V3</title>
+  <title>SIADO V3.3</title>
 
   <meta name="description" content="Aplikasi Ujian Online SMP Labschool Untad Palu." />
   <meta name="theme-color" content="#0f172a" />
@@ -122,7 +122,7 @@
 
       bingkai.src = alamatAplikasi(halamanAwal, kodeAwal);
       if (halamanAwal === 'admin') {
-        document.title = 'Kelola Ujian | SIADO V3';
+        document.title = 'Kelola Ujian | SIADO V3.3';
         pesan.textContent = 'Memuat Kelola Ujian\u2026';
       }
 
@@ -145,7 +145,7 @@
 
         var keAdmin = ev.data.halaman === 'admin';
         tampilkanTirai(keAdmin ? 'Membuka Kelola Ujian\u2026' : 'Membuka halaman ujian\u2026');
-        document.title = keAdmin ? 'Kelola Ujian | SIADO V3' : 'SIADO V3';
+        document.title = keAdmin ? 'Kelola Ujian | SIADO V3.3' : 'SIADO V3.3';
 
         // Alamat dari aplikasi dipakai hanya bila benar menunjuk ke Apps Script.
         var tujuan = String(ev.data.url || '');
