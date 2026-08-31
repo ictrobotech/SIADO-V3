@@ -320,7 +320,9 @@ function bindAdminInterface() {
   // Data peserta dan rombel
   bindSubmit_('rombelForm', saveRombel);
   bindSubmit_('participantForm', createParticipant);
-  bindClick_('refreshPeserta', buatRefresh_('Data peserta', loadParticipants, function() { return (ADMIN.participants || []).length; }));
+  // Refresh Data Peserta SELALU memaksa pemuatan ulang (tidak di-skip saat
+  // permintaan sebelumnya masih berjalan) — diperbaiki putaran 8.
+  bindClick_('refreshPeserta', buatRefresh_('Data peserta', function() { return loadParticipants(true); }, function() { return (ADMIN.participants || []).length; }));
   bindClick_('generateToken', function() {
     document.getElementById('rToken').value = buatTokenAcak_();
     showToast('Token acak dibuat. Simpan rombel untuk menerapkannya.', 'info');
@@ -359,7 +361,7 @@ function bindAdminInterface() {
     }
   });
   var filterRombel = document.getElementById('filterPesertaRombel');
-  if (filterRombel) filterRombel.addEventListener('change', loadParticipants);
+  if (filterRombel) filterRombel.addEventListener('change', function() { loadParticipants(true); });
 
   // Nilai uraian massal
   bindClick_('saveAllEssayScores', saveAllEssayScores);
@@ -3310,10 +3312,13 @@ async function deleteTeacher(username) {
 /**
  * Memuat data peserta + rombel.
  *
- * paksa=true dipakai saat masuk ke tab Data Peserta: bila masih ada
- * permintaan sebelumnya yang berjalan, permintaan baru diantrekan
- * (pesertaReloadQueued) dan dijalankan begitu yang lama selesai — jadi
- * kembali ke tab ini TIDAK akan macet di "Memuat data peserta...".
+ * paksa=true dipakai saat masuk ke tab Data Peserta, tombol Refresh, atau
+ * ganti filter rombel: bila masih ada permintaan sebelumnya yang berjalan,
+ * pemuatan diantrekan (pesertaReloadQueued) dan dijalankan begitu yang lama
+ * selesai — jadi kembali ke tab / klik Refresh TIDAK diabaikan.
+ * Bila gagal, dicoba otomatis 1× (retry) — berguna saat server baru dingin
+ * (cold start). Data lama dipertahankan; "gagal memuat" hanya muncul bila
+ * belum ada data sama sekali.
  */
 async function loadParticipants(paksa) {
   if (!ADMIN.token) return;
@@ -3332,7 +3337,15 @@ async function loadParticipants(paksa) {
     renderRombelList_(ADMIN.rombel);
     isiPilihanRombelAdmin_(ADMIN.rombel);
     terapkanFilterPeserta_();
+    ADMIN.pesertaRetried = false;
   } catch (error) {
+    // Cold start / gangguan sesaat: coba sekali lagi otomatis.
+    if (!ADMIN.pesertaRetried && (!ADMIN.participants || !ADMIN.participants.length)) {
+      ADMIN.pesertaRetried = true;
+      setTableMessage('participantTable', 'Pemuatan gagal — mencoba ulang...', 'fa-arrows-rotate');
+      window.setTimeout(function() { loadParticipants(true); }, 1500);
+      return;
+    }
     // Jangan menghapus data yang sudah tampil: bila ada data lama, tampilkan
     // itu + toast; "gagal memuat" hanya muncul bila belum ada data sama sekali.
     if (!ADMIN.participants || !ADMIN.participants.length) {
@@ -4367,4 +4380,4 @@ function escapeAdmin(value) { return String(value === undefined || value === nul
 function readFileAsDataUrl(file) { return new Promise(function(resolve, reject) { var reader = new FileReader(); reader.onload = function() { resolve(reader.result); }; reader.onerror = reject; reader.readAsDataURL(file); }); }
 function debounce(fn, wait) { var timeout; return function() { var args = arguments; clearTimeout(timeout); timeout = setTimeout(function() { fn.apply(null, args); }, wait); }; }
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33e771b0b15ce57',t:'MTc4ODIwNDc4OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33e977e58fc8823',t:'MTc4ODIwNjExNQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
