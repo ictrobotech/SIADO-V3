@@ -258,7 +258,7 @@
       <aside id="adminSidebar" class="admin-sidebar" aria-label="Menu utama panel">
         <div class="sidebar-brand">
           <div class="admin-brand-icon brand-logo"><img src="<?!= getAppLogoDataUri_(); ?>" alt="Logo sekolah"></div>
-          <div><h1>SIADO V3.3</h1><p>SMP LABSCHOOL UNTAD</p></div>
+          <div><h1>SIADO V3</h1><p>SMP LABSCHOOL UNTAD</p></div>
         </div>
 
         <div class="sidebar-role">
@@ -665,7 +665,11 @@
                       <input id="sDurasiRealtime" class="admin-input" type="number" min="1" max="300" style="max-width:150px" placeholder="Menit baru">
                       <button id="btnTerapkanDurasi" class="admin-primary" type="button"><i class="fa-solid fa-clock-rotate-left"></i> Terapkan</button>
                     </div>
-                    <small>Pilih satu peserta untuk mengubah waktunya saja, atau biarkan "Semua peserta aktif" untuk semua. Waktu yang sudah terpakai dipertahankan, sisanya dihitung ulang dari durasi baru. Perubahan terlihat peserta dalam ≤10 detik.</small>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+                      <button id="btnResetWaktuPeserta" class="admin-danger" type="button"><i class="fa-solid fa-rotate-left"></i> Reset Waktu Peserta Terpilih</button>
+                      <button id="btnResetWaktuSemua" class="admin-danger" type="button"><i class="fa-solid fa-stopwatch"></i> Reset Waktu Semua Peserta</button>
+                    </div>
+                    <small>Pilih satu peserta untuk mengubah waktunya saja, atau biarkan "Semua peserta aktif" untuk semua. Waktu yang sudah terpakai dipertahankan, sisanya dihitung ulang dari durasi baru. <b>Reset waktu</b> mengembalikan sisa waktu peserta ke durasi penuh ujiannya. Perubahan terlihat peserta dalam ≤10 detik.</small>
                   </div>
                 </div>
                 <button class="admin-primary" type="submit"><i class="fa-solid fa-floppy-disk"></i> Simpan Pengaturan</button>
@@ -904,6 +908,5 @@
     var SESI_HANDOFF = <?!= (typeof SESI_HANDOFF !== 'undefined' && SESI_HANDOFF) ? SESI_HANDOFF : 'null'; ?>;
   </script>
   <?!= include('admin-script'); ?>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33dcf5dbb5920bb',t:'MTc4ODE5NzkxOA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v3d52b47920f24c319d37e2661827c42b1787588026925" integrity="sha512-d9sL6GJLXn6fInD1+TVXhTcQOsmxeHfmHAvwGDIxp5TO+uo1fiWW7mHomMj4MLRlCsJDTqXzWLHJFFlPCEIj/A==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33e68c18b52fdce',t:'MTc4ODIwNDIwMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
