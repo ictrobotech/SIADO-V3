@@ -230,5 +230,39 @@ button:disabled{cursor:not-allowed;opacity:.55}
   .briefing-actions{flex-direction:column-reverse}
   .briefing-actions .secondary-button{width:100%;justify-content:center}
 }
-</style>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33d48f2cc7f91b3',t:'MTc4ODE5MjQxMg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+
+/* ================================================================
+ * REVISI 6: LIMA TEMA PROFESIONAL
+ * Dipilih admin di panel (Pengaturan -> Tema Tampilan). Nilai variabel
+ * di bawah menimpa tema bawaan navy sehingga seluruh halaman (login,
+ * ruang ujian, panel) ikut berganti warna secara konsisten.
+ * ================================================================ */
+:root[data-theme="emerald"]{
+  --navy:#0b3d2e;--ink:#123b2d;--muted:#4e7a68;--line:#cfe3d9;--surface:#ffffff;--page:#f2f8f5;
+  --blue:#0e9f6e;--blue-dark:#0a7d56;--blue-soft:#e4f6ee;
+  --green:#15803d;--green-soft:#e9f9ef;--amber:#b45309;--amber-soft:#fff7e8;
+  --red:#c62828;--red-soft:#fff0f0;--purple:#0e9f6e;
+  --shadow:0 18px 50px rgba(11,61,46,.14)
+}
+:root[data-theme="royal"]{
+  --navy:#2b1060;--ink:#2a1654;--muted:#6d5b95;--line:#ddd4ef;--surface:#ffffff;--page:#f7f5fc;
+  --blue:#6d28d9;--blue-dark:#5b21b6;--blue-soft:#f0e9fd;
+  --green:#15803d;--green-soft:#e9f9ef;--amber:#b45309;--amber-soft:#fff7e8;
+  --red:#c62828;--red-soft:#fff0f0;--purple:#6d28d9;
+  --shadow:0 18px 50px rgba(43,16,96,.15)
+}
+:root[data-theme="ocean"]{
+  --navy:#083344;--ink:#0c3b4d;--muted:#3f7183;--line:#c9e2ea;--surface:#ffffff;--page:#f0f8fa;
+  --blue:#0d9488;--blue-dark:#0f766e;--blue-soft:#e0f5f2;
+  --green:#15803d;--green-soft:#e9f9ef;--amber:#b45309;--amber-soft:#fff7e8;
+  --red:#c62828;--red-soft:#fff0f0;--purple:#0d9488;
+  --shadow:0 18px 50px rgba(8,51,68,.14)
+}
+:root[data-theme="sunset"]{
+  --navy:#431407;--ink:#4a1d0e;--muted:#8a5a44;--line:#f0d9cc;--surface:#ffffff;--page:#fdf6f2;
+  --blue:#ea580c;--blue-dark:#c2410c;--blue-soft:#ffedd8;
+  --green:#15803d;--green-soft:#e9f9ef;--amber:#b45309;--amber-soft:#fff7e8;
+  --red:#c62828;--red-soft:#fff0f0;--purple:#ea580c;
+  --shadow:0 18px 50px rgba(67,20,7,.14)
+}
+</style><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33dcfc61a3920bb',t:'MTc4ODE5NzkzNQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
