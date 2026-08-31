@@ -118,10 +118,46 @@ function adminApi(action, payload) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+  // Terapkan tema tersimpan secepatnya agar panel tidak berkedip; server
+  // menegaskan tema resmi lewat getBootstrapAdmin.
+  try {
+    var temaTersimpan = localStorage.getItem('siado_tema');
+    if (temaTersimpan) document.documentElement.setAttribute('data-theme', temaTersimpan);
+  } catch (error) {}
   bindAdminInterface();
   startBrandingSync_();
   if (!terimaHandoffPanel_()) tryRestoreAdminSession();
 });
+
+/** Menerapkan tema tampilan pada panel (5 tema profesional). */
+function terapkanTemaPanel_() {
+  var tema = String(ADMIN.tema || 'navy').toLowerCase();
+  try { localStorage.setItem('siado_tema', tema); } catch (error) {}
+  document.documentElement.setAttribute('data-theme', tema);
+}
+
+/** Daftar tema profesional yang tersedia di panel. */
+var DAFTAR_TEMA_ = [
+  { id: 'navy', nama: 'Navy Profesional' },
+  { id: 'emerald', nama: 'Emerald Modern' },
+  { id: 'royal', nama: 'Royal Violet' },
+  { id: 'ocean', nama: 'Ocean Teal' },
+  { id: 'sunset', nama: 'Sunset Coral' }
+];
+
+/** Menyimpan tema pilihan admin ke server dan menerapkannya langsung. */
+async function simpanTemaAdmin_() {
+  var pilih = document.getElementById('sTema');
+  if (!pilih) return;
+  try {
+    var result = await apiWajib_('simpanTema', { tema: pilih.value });
+    ADMIN.tema = result.tema || pilih.value;
+    terapkanTemaPanel_();
+    showToast(result.message || 'Tema tampilan diterapkan.', 'success');
+  } catch (error) {
+    showToast('Tema gagal disimpan: ' + (error.message || ''), 'error');
+  }
+}
 
 /** Menghapus kode handoff dari address bar agar tidak tersalin/terpakai ulang. */
 function bersihkanKodeHandoffUrl_() {
@@ -302,12 +338,25 @@ function bindAdminInterface() {
   bindClick_('batalEditGuru', tutupEditGuru_);
   bindSubmit_('editTeacherForm', simpanEditGuru_);
   bindPasswordToggle('toggleEgPassword', 'egPassword', 'password guru');
+  // REVISI 6: preview username sesuai yang diketik admin/guru.
   var pNama = document.getElementById('pNama');
+  var pUsername = document.getElementById('pUsername');
+  var pUsernamePreview = document.getElementById('pUsernamePreview');
+  if (pUsername && pUsernamePreview) {
+    pUsername.addEventListener('input', function() {
+      var nilai = this.value.trim();
+      pUsernamePreview.textContent = nilai
+        ? 'Username login peserta: ' + nilai.toLowerCase().replace(/\s+/g, '').replace(/\./g, '')
+        : 'Aturan: huruf kecil, tanpa spasi, tanpa titik; angka dan simbol _ / - boleh.';
+    });
+  }
   if (pNama) pNama.addEventListener('input', function() {
-    var depan = namaDepanKlien_(this.value);
-    document.getElementById('pUsernamePreview').innerHTML = depan ?
-      'Username peserta: <b>' + escapeAdmin(depan) + '</b>' :
-      'Username akan dibuat otomatis dari nama depan.';
+    if (!pUsername || !pUsername.value.trim()) {
+      var depan = namaDepanKlien_(this.value);
+      if (pUsernamePreview) pUsernamePreview.innerHTML = depan ?
+        'Username peserta: <b>' + escapeAdmin(depan) + '</b>' :
+        'Aturan: huruf kecil, tanpa spasi, tanpa titik; angka dan simbol _ / - boleh.';
+    }
   });
   var filterRombel = document.getElementById('filterPesertaRombel');
   if (filterRombel) filterRombel.addEventListener('change', loadParticipants);
@@ -343,6 +392,8 @@ function bindAdminInterface() {
   document.getElementById('addQuestionForm').addEventListener('submit', function(event) { event.preventDefault(); saveNewQuestion(); });
   document.getElementById('editQuestionForm').addEventListener('submit', function(event) { event.preventDefault(); saveEditedQuestion(); });
   document.getElementById('btnTerapkanDurasi').addEventListener('click', terapkanDurasiRealtime);
+  var btnTema = document.getElementById('btnSimpanTema');
+  if (btnTema) btnTema.addEventListener('click', simpanTemaAdmin_);
   document.getElementById('closeEditModal').addEventListener('click', closeEditQuestion);
   document.getElementById('cancelEdit').addEventListener('click', closeEditQuestion);
   document.getElementById('settingsForm').addEventListener('submit', function(event) { event.preventDefault(); saveSettings(); });
@@ -840,6 +891,11 @@ async function loginAdminPanel(event) {
     var result = await adminApi('loginTerpadu', { username: username, password: password });
     if (!result.success) {
       setAdminLoginMessage(result.message || 'Login gagal.', 'error');
+      // REVISI 6: bila salah, kolom dikosongkan kembali (default) dan tidak
+      // ada petunjuk username/password yang benar.
+      document.getElementById('adminUsername').value = '';
+      document.getElementById('adminPassword').value = '';
+      document.getElementById('adminUsername').focus();
       return;
     }
     if (result.tipe === 'PESERTA') {
@@ -941,7 +997,7 @@ function switchAdminTab(tab) {
   if (tab === 'peserta') loadParticipants();
   if (tab === 'pengguna') loadTeachers();
   if (tab === 'notifikasi') loadNotifications();
-  if (tab === 'pengaturan') loadSettings();
+  if (tab === 'pengaturan') { loadSettings(); muatDaftarPesertaDurasi_(); }
 }
 
 function applyDashboardSummary(summary) {
@@ -1086,6 +1142,8 @@ async function loadAdminBootstrap() {
       ADMIN.role = result.profil.role || ADMIN.role;
       terapkanHakAkses_();
     }
+    ADMIN.tema = result.tema || ADMIN.tema || 'navy';
+    terapkanTemaPanel_();
     ADMIN.notifications = result.notifikasi || [];
     applyNotificationBadge_(result.notifikasiBelumDibaca || 0);
     return true;
@@ -1652,29 +1710,73 @@ function tingkatBadgeSoal_(tingkat) {
   return '<span class="tingkat-pill">' + escapeAdmin(t) + '</span>';
 }
 
-/** Mengubah durasi ujian dan menerapkannya realtime ke peserta aktif. */
+/** Mengubah durasi ujian: untuk satu peserta terpilih atau semua peserta aktif. */
 async function terapkanDurasiRealtime() {
   var nilai = document.getElementById('sDurasiRealtime').value;
   if (!nilai || Number(nilai) < 1 || Number(nilai) > 300) {
     showToast('Isi durasi baru antara 1–300 menit.', 'error');
     return;
   }
-  var setuju = await konfirmasi_('Durasi ujian akan diubah menjadi ' + nilai + ' menit dan diterapkan realtime ke peserta yang sedang aktif. Lanjutkan?', {
+  var pilih = document.getElementById('sPesertaDurasi');
+  var sessionId = pilih ? pilih.value : '';
+  var sasaranDeskripsi = 'semua peserta aktif';
+  var sasaranNama = '';
+  if (sessionId) {
+    var peserta = (DATA_MENTAH.monitor || []).filter(function(p) { return String(p.session_id) === sessionId; })[0];
+    sasaranNama = (peserta && peserta.nama) || 'peserta terpilih';
+    sasaranDeskripsi = 'peserta ' + sasaranNama + (peserta && peserta.kelas ? ' (' + peserta.kelas + ')' : '');
+  }
+  var setuju = await konfirmasi_('Durasi ujian akan diubah menjadi ' + nilai + ' menit dan diterapkan realtime ke ' + sasaranDeskripsi + '. Lanjutkan?', {
     judul: 'Ubah Durasi Realtime', nada: 'warn', teksOk: 'Ya, Terapkan'
   });
   if (!setuju) return;
   try {
-    var result = await apiWajib_('ubahDurasiRealtime', { durasiMenit: nilai });
+    var result = sessionId
+      ? await apiWajib_('ubahDurasiRealtimePeserta', { durasiMenit: nilai, sessionId: sessionId })
+      : await apiWajib_('ubahDurasiRealtime', { durasiMenit: nilai });
     document.getElementById('sDurasiRealtime').value = '';
-    document.getElementById('sDurasi').value = result.durasiMenit;
+    // Hanya perubahan "semua peserta" yang ikut mengubah durasi default pengaturan.
+    if (!sessionId) document.getElementById('sDurasi').value = result.durasiMenit;
     await segarkanSenyap_([loadSettings, loadMonitor]);
-    await hasilSukses_('Durasi Diubah', result.message || 'Durasi berhasil diubah.', [
-      { label: 'Durasi baru', nilai: result.durasiMenit + ' menit' },
-      { label: 'Sesi peserta disesuaikan', nilai: String(result.jumlahSesi || 0) }
-    ]);
+    if (sessionId) {
+      await hasilSukses_('Durasi Peserta Diubah', result.message || 'Durasi berhasil diubah.', [
+        { label: 'Peserta', nilai: (result.namaPeserta || sasaranNama) + (result.kelasPeserta ? ' — ' + result.kelasPeserta : '') },
+        { label: 'Durasi baru', nilai: result.durasiMenit + ' menit' }
+      ]);
+    } else {
+      await hasilSukses_('Durasi Diubah', result.message || 'Durasi berhasil diubah.', [
+        { label: 'Durasi baru', nilai: result.durasiMenit + ' menit' },
+        { label: 'Sesi peserta disesuaikan', nilai: String(result.jumlahSesi || 0) }
+      ]);
+    }
   } catch (error) {
     await hasilGagal_('Gagal Mengubah Durasi', error.message || 'Durasi gagal diubah.');
   }
+}
+
+/** Mengisi daftar peserta aktif pada dropdown "Ubah Durasi Realtime" (sasaran 1 peserta). */
+function muatDaftarPesertaDurasi_() {
+  var pilih = document.getElementById('sPesertaDurasi');
+  if (!pilih) return;
+  var daftar = (DATA_MENTAH.monitor || []).slice().sort(function(a, b) {
+    return String(a.nama).localeCompare(String(b.nama));
+  });
+  var terpilih = pilih.value;
+  pilih.innerHTML = '';
+  var o0 = document.createElement('option');
+  o0.value = '';
+  o0.textContent = 'Semua peserta aktif';
+  pilih.appendChild(o0);
+  daftar.forEach(function(p) {
+    var label = (p.nama || '(tanpa nama)') + ' — ' + (p.kelas || '-');
+    if (p.username) label += ' (' + p.username + ')';
+    if (String(p.status) !== 'AKTIF') label += ' · ' + String(p.status);
+    var o = document.createElement('option');
+    o.value = String(p.session_id);
+    o.textContent = label;
+    pilih.appendChild(o);
+  });
+  if (terpilih) pilih.value = terpilih;
 }
 
 async function loadQuestions() {
@@ -1865,6 +1967,7 @@ async function loadMonitor() {
     if (!guardAdminResult(result)) return;
     DATA_MENTAH.monitor = result.data || [];
     terapkanFilterMonitor_();
+    muatDaftarPesertaDurasi_();
   } catch (error) { setTableMessage('monitorTable', 'Gagal memuat monitor peserta.', 'fa-triangle-exclamation'); }
   finally { ADMIN.refreshBusy.monitor = false; }
 }
@@ -2301,6 +2404,13 @@ async function loadSettings() {
     applySettingsData(result.data);
     applyBrandingData_(result.branding);
     if (result.data && result.data.loginBackground) applyBackgroundData_(result.data.loginBackground);
+    var pilihTema = document.getElementById('sTema');
+    if (pilihTema && pilihTema.options.length === 0) {
+      pilihTema.innerHTML = DAFTAR_TEMA_.map(function(tema) {
+        return '<option value="' + tema.id + '">' + escapeAdmin(tema.nama) + '</option>';
+      }).join('');
+    }
+    if (pilihTema) pilihTema.value = String(ADMIN.tema || 'navy').toLowerCase();
   } catch (error) { showToast('Pengaturan gagal dimuat.', 'error'); }
   finally { ADMIN.refreshBusy.settings = false; }
 }
@@ -2658,17 +2768,17 @@ function unduhTemplateSoal() {
 
 function unduhTemplatePeserta() {
   var rows = [
-    ['nama', 'rombel', 'nis'],
-    ['Ahmad Fauzan Ramadhan', 'VII A', '2024001'],
-    ['Siti Aisyah Putri', 'VII A', '2024002'],
-    ['Bagus Prakoso', 'VIII B', '2023015']
+    ['nama', 'rombel', 'username', 'nis'],
+    ['Ahmad Fauzan Ramadhan', 'VII A', 'ahmadfauzan', '2024001'],
+    ['Siti Aisyah Putri', 'VII A', 'siti_aisyah', '2024002'],
+    ['Bagus Prakoso', 'VIII B', '', '2023015']
   ];
   unduhCsv_(rows, 'template-import-peserta.csv');
   hasilSukses_('Template Peserta Diunduh',
-    'Berkas template tersimpan di folder unduhan perangkat Anda. Isi kolom nama, rombel, dan NIS lalu simpan sebagai CSV UTF-8.', [
+    'Berkas template tersimpan di folder unduhan perangkat Anda. Isi kolom nama, rombel, username (opsional — kosongkan untuk dibuat otomatis dari nama depan), dan NIS lalu simpan sebagai CSV UTF-8.', [
       { label: 'Nama berkas', nilai: 'template-import-peserta.csv' },
       { label: 'Kolom wajib', nilai: 'nama, rombel' },
-      { label: 'Kolom opsional', nilai: 'nis' }
+      { label: 'Kolom opsional', nilai: 'username, nis' }
     ]);
 }
 
@@ -2902,8 +3012,27 @@ function renderNotifications_(rows) {
       '<div class="notif-icon"><i class="fa-solid ' + ikon + '"></i></div>' +
       '<div class="notif-body"><strong>' + escapeAdmin(item.judul) + '<span class="notif-cat">' + escapeAdmin(item.kategori || 'UMUM') + '</span></strong>' +
       '<p>' + escapeAdmin(item.pesan) + '</p>' +
-      '<time>' + escapeAdmin(formatDate(item.timestamp)) + (item.sumber ? ' • ' + escapeAdmin(item.sumber) : '') + '</time></div></article>';
+      '<time>' + escapeAdmin(formatDate(item.timestamp)) + (item.sumber ? ' • ' + escapeAdmin(item.sumber) : '') + '</time></div>' +
+      '<div class="notif-actions"><button class="mini-button delete" type="button" title="Hapus notifikasi ini" data-hapus-notif="' + escapeAdmin(item.id) + '"><i class="fa-solid fa-trash"></i></button></div></article>';
   }).join('');
+  // REVISI 6: guru mapel juga dapat menghapus notifikasi satu per satu.
+  document.querySelectorAll('[data-hapus-notif]').forEach(function(button) {
+    button.addEventListener('click', function() { hapusSatuNotifikasi_(this.dataset.hapusNotif); });
+  });
+}
+
+async function hapusSatuNotifikasi_(id) {
+  var setuju = await konfirmasi_('Notifikasi ini akan dihapus permanen.', {
+    judul: 'Hapus Notifikasi', nada: 'warn', teksOk: 'Ya, Hapus'
+  });
+  if (!setuju) return;
+  try {
+    var result = await apiWajib_('hapusNotifikasi', { id: id });
+    await segarkanSenyap_([loadNotifications]);
+    showToast(result.message || 'Notifikasi dihapus.', 'success');
+  } catch (error) {
+    showToast('Notifikasi gagal dihapus: ' + (error.message || ''), 'error');
+  }
 }
 
 async function markNotificationsRead(id) {
@@ -3168,6 +3297,7 @@ function renderRombelList_(rows) {
     container.innerHTML = '<div class="empty-state"><i class="fa-solid fa-layer-group"></i> Belum ada rombel. Tambahkan rombel VII, VIII, atau IX terlebih dahulu.</div>';
     return;
   }
+  var bolehUrut = !!ADMIN.isAdmin;
   container.innerHTML = rows.map(function(item) {
     return '<article class="rombel-card"><h4>' + escapeAdmin(item.rombel) + ' <span class="tingkat-pill">Tingkat ' + escapeAdmin(item.tingkat || '-') + '</span></h4>' +
       '<p>Wali kelas: <b>' + escapeAdmin(item.waliKelas || '-') + '</b></p>' +
@@ -3175,11 +3305,20 @@ function renderRombelList_(rows) {
       '<p>Token: <span class="' + (item.adaToken ? 'token-yes' : 'token-no') + '">' + (item.adaToken ? 'Sudah diatur' : 'Belum diatur') + '</span></p>' +
       '<p>Status: ' + (item.aktif ? badge('Aktif', 'green') : badge('Nonaktif', 'gray')) + '</p>' +
       '<div class="rombel-actions">' +
+      (bolehUrut
+        ? '<button class="mini-button" type="button" title="Naikkan urutan rombel" data-naik-rombel="' + escapeAdmin(item.rombel) + '"><i class="fa-solid fa-arrow-up"></i></button>' +
+          '<button class="mini-button" type="button" title="Turunkan urutan rombel" data-turun-rombel="' + escapeAdmin(item.rombel) + '"><i class="fa-solid fa-arrow-down"></i></button>'
+        : '') +
       '<button class="mini-button edit" type="button" data-edit-rombel="' + escapeAdmin(item.rombel) + '"><i class="fa-solid fa-pen"></i> Ubah</button>' +
       '<button class="mini-button" type="button" data-token-rombel="' + escapeAdmin(item.rombel) + '"><i class="fa-solid fa-key"></i> Ganti Token</button>' +
       '<button class="mini-button delete" type="button" data-hapus-rombel="' + escapeAdmin(item.rombel) + '"><i class="fa-solid fa-trash"></i></button>' +
       '</div></article>';
   }).join('');
+  if (bolehUrut) {
+    container.insertAdjacentHTML('beforeend',
+      '<div class="rombel-actions" style="margin-top:6px"><button class="mini-button" type="button" id="resetUrutanRombelBtn"><i class="fa-solid fa-rotate-left"></i> Kembalikan Urutan Rombel Bawaan Sekolah</button></div>');
+    document.getElementById('resetUrutanRombelBtn').addEventListener('click', resetUrutanRombel_);
+  }
   document.querySelectorAll('[data-edit-rombel]').forEach(function(button) {
     button.addEventListener('click', function() { isiFormRombel_(this.dataset.editRombel); });
   });
@@ -3189,6 +3328,49 @@ function renderRombelList_(rows) {
   document.querySelectorAll('[data-hapus-rombel]').forEach(function(button) {
     button.addEventListener('click', function() { hapusRombel_(this.dataset.hapusRombel); });
   });
+  // REVISI 6: urutan rombel (VII KH Dewantara ... IX Karanjalemba) diatur admin.
+  document.querySelectorAll('[data-naik-rombel]').forEach(function(button) {
+    button.addEventListener('click', function() { pindahUrutanRombel_(this.dataset.naikRombel, -1); });
+  });
+  document.querySelectorAll('[data-turun-rombel]').forEach(function(button) {
+    button.addEventListener('click', function() { pindahUrutanRombel_(this.dataset.turunRombel, 1); });
+  });
+}
+
+/** Menggeser urutan rombel lalu menyimpannya ke server (khusus admin). */
+async function pindahUrutanRombel_(rombel, delta) {
+  var daftar = (ADMIN.rombel || []).slice();
+  var idx = -1;
+  for (var i = 0; i < daftar.length; i++) { if (String(daftar[i].rombel) === String(rombel)) { idx = i; break; } }
+  var target = idx + delta;
+  if (idx < 0 || target < 0 || target >= daftar.length) return;
+  var sementara = daftar[idx];
+  daftar[idx] = daftar[target];
+  daftar[target] = sementara;
+  try {
+    var result = await apiWajib_('simpanUrutanRombel', {
+      urutan: daftar.map(function(item) { return item.rombel; })
+    });
+    showToast(result.message || 'Urutan rombel disimpan.', 'success');
+    await segarkanSenyap_([loadParticipants]);
+  } catch (error) {
+    showToast('Urutan rombel gagal disimpan: ' + (error.message || ''), 'error');
+  }
+}
+
+/** Mengembalikan urutan rombel ke daftar bawaan sekolah (khusus admin). */
+async function resetUrutanRombel_() {
+  var setuju = await konfirmasi_(
+    'Urutan rombel akan dikembalikan ke bawaan sekolah (VII KH Dewantara, VII Ahmad Dahlan, ... IX Karanjalemba). Lanjutkan?',
+    { judul: 'Reset Urutan Rombel', nada: 'warn', teksOk: 'Ya, Kembalikan' });
+  if (!setuju) return;
+  try {
+    var result = await apiWajib_('simpanUrutanRombel', { reset: true });
+    showToast(result.message || 'Urutan rombel dikembalikan ke bawaan.', 'success');
+    await segarkanSenyap_([loadParticipants]);
+  } catch (error) {
+    showToast('Reset urutan gagal: ' + (error.message || ''), 'error');
+  }
 }
 
 function isiFormRombel_(nama) {
@@ -3301,10 +3483,17 @@ function renderParticipantTable_(rows) {
   // Proktor/admin dapat mengubah dan menghapus data peserta. Guru mapel tidak,
   // tetapi tetap boleh mencatat kehadiran karena kehadiran diisi per ujian.
   var bolehUbah = ADMIN.isAdmin;
-  var html = '<table class="admin-table"><thead><tr><th>Nama Lengkap</th><th>Username</th><th>Rombel</th><th>NIS</th><th>Kehadiran</th><th>Status</th>' +
+  var html = '<table class="admin-table"><thead><tr>' +
+    (bolehUbah ? '<th>Urutan</th>' : '') +
+    '<th>Nama Lengkap</th><th>Username</th><th>Rombel</th><th>NIS</th><th>Kehadiran</th><th>Status</th>' +
     '<th>Aksi</th></tr></thead><tbody>';
   rows.forEach(function(row) {
-    html += '<tr><td><strong>' + escapeAdmin(row.nama) + '</strong></td>' +
+    html += '<tr>' +
+      (bolehUbah
+        ? '<td><div class="row-actions"><button class="mini-button" type="button" title="Naikkan urutan" data-naik-peserta="' + escapeAdmin(row.id) + '"><i class="fa-solid fa-arrow-up"></i></button>' +
+          '<button class="mini-button" type="button" title="Turunkan urutan" data-turun-peserta="' + escapeAdmin(row.id) + '"><i class="fa-solid fa-arrow-down"></i></button></div></td>'
+        : '') +
+      '<td><strong>' + escapeAdmin(row.nama) + '</strong></td>' +
       '<td><code>' + escapeAdmin(row.username) + '</code></td>' +
       '<td>' + badge(row.rombel, 'blue') + '</td>' +
       '<td>' + escapeAdmin(row.nis || '-') + '</td>' +
@@ -3329,6 +3518,41 @@ function renderParticipantTable_(rows) {
   document.querySelectorAll('[data-hapus-peserta]').forEach(function(button) {
     button.addEventListener('click', function() { deleteParticipant(this.dataset.hapusPeserta); });
   });
+  // REVISI 6: urutan nama siswa diatur langsung oleh admin (tidak mengikuti abjad).
+  document.querySelectorAll('[data-naik-peserta]').forEach(function(button) {
+    button.addEventListener('click', function() { pindahUrutanPeserta_(this.dataset.naikPeserta, -1); });
+  });
+  document.querySelectorAll('[data-turun-peserta]').forEach(function(button) {
+    button.addEventListener('click', function() { pindahUrutanPeserta_(this.dataset.turunPeserta, 1); });
+  });
+}
+
+/** Menggeser urutan manual satu peserta lalu menyimpannya ke server (admin). */
+async function pindahUrutanPeserta_(id, delta) {
+  var peserta = (ADMIN.participants || []).filter(function(item) { return String(item.id) === String(id); })[0];
+  if (!peserta) return;
+  var rombel = String(peserta.rombel || '').toUpperCase();
+  var daftar = (ADMIN.participants || []).filter(function(item) {
+    return String(item.rombel || '').toUpperCase() === rombel;
+  });
+  var idx = -1;
+  for (var i = 0; i < daftar.length; i++) { if (String(daftar[i].id) === String(id)) { idx = i; break; } }
+  var target = idx + delta;
+  if (idx < 0 || target < 0 || target >= daftar.length) return;
+  var sementara = daftar[idx];
+  daftar[idx] = daftar[target];
+  daftar[target] = sementara;
+  terapkanFilterPeserta_();
+  try {
+    var result = await apiWajib_('simpanUrutanPeserta', {
+      rombel: rombel,
+      urutan: daftar.map(function(item) { return item.id; })
+    });
+    showToast(result.message || 'Urutan peserta disimpan.', 'success');
+  } catch (error) {
+    showToast('Urutan gagal disimpan: ' + (error.message || ''), 'error');
+    loadParticipants();
+  }
 }
 
 /**
@@ -3391,6 +3615,7 @@ async function createParticipant() {
   try {
     var result = await adminApi('tambahPeserta', {
       nama: document.getElementById('pNama').value,
+      username: document.getElementById('pUsername').value,
       rombel: document.getElementById('pRombel').value,
       nis: document.getElementById('pNis').value
     });
@@ -3398,8 +3623,9 @@ async function createParticipant() {
     var namaBaru = document.getElementById('pNama').value;
     var rombelBaru = document.getElementById('pRombel').value;
     document.getElementById('pNama').value = '';
+    document.getElementById('pUsername').value = '';
     document.getElementById('pNis').value = '';
-    document.getElementById('pUsernamePreview').textContent = 'Username akan dibuat otomatis dari nama depan.';
+    document.getElementById('pUsernamePreview').textContent = 'Aturan: huruf kecil, tanpa spasi, tanpa titik; angka dan simbol _ / - boleh.';
     await segarkanSenyap_([loadParticipants]);
     await hasilSukses_('Peserta Ditambahkan', result.message || 'Peserta baru berhasil didaftarkan.', [
       { label: 'Nama', nilai: namaBaru },
@@ -3525,6 +3751,7 @@ async function importPesertaDariFile() {
       return {
         nama: item.nama || item.nama_lengkap || item.nama_siswa || '',
         rombel: item.rombel || item.kelas || '',
+        username: item.username || item.nama_depan || '',
         nis: item.nis || item.nomor_induk || ''
       };
     });
@@ -4066,4 +4293,4 @@ function escapeAdmin(value) { return String(value === undefined || value === nul
 function readFileAsDataUrl(file) { return new Promise(function(resolve, reject) { var reader = new FileReader(); reader.onload = function() { resolve(reader.result); }; reader.onerror = reject; reader.readAsDataURL(file); }); }
 function debounce(fn, wait) { var timeout; return function() { var args = arguments; clearTimeout(timeout); timeout = setTimeout(function() { fn.apply(null, args); }, wait); }; }
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33d2221eda08be4',t:'MTc4ODE5MDgyMg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33dcf36bd5620bb',t:'MTc4ODE5NzkxMg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v3d52b47920f24c319d37e2661827c42b1787588026925" integrity="sha512-d9sL6GJLXn6fInD1+TVXhTcQOsmxeHfmHAvwGDIxp5TO+uo1fiWW7mHomMj4MLRlCsJDTqXzWLHJFFlPCEIj/A==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
