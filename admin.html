@@ -91,7 +91,7 @@
 
     /* Notifikasi */
     .notif-list{display:flex;flex-direction:column;gap:9px;max-height:60vh;overflow:auto}
-    .notif-item{display:flex;gap:11px;padding:12px 13px;border:1px solid #e2eaf2;border-radius:11px;background:#fff}
+    .notif-item{display:flex;gap:11px;padding:12px 13px;border:1px solid #e2eaf2;border-radius:11px;background:#fff}.notif-item .notif-body{flex:1;min-width:0}.notif-actions{display:flex;align-items:flex-start}.notif-actions .mini-button{padding:5px 8px}
     .notif-item.unread{background:#f5faff;border-color:#bcd8fb}
     .notif-icon{width:34px;height:34px;flex:0 0 auto;border-radius:9px;display:grid;place-items:center;background:#eaf3ff;color:#1f6feb;font-size:13px}
     .notif-item.warn .notif-icon{background:#fff5e6;color:#b45309}
@@ -191,6 +191,30 @@
       display:flex;align-items:center;gap:9px}
     .filter-empty i{font-size:15px;color:#c98a1e}
     .filter-empty[hidden]{display:none}
+  </style>
+  <style>
+    /* REVISI 6: aksen tema profesional pada panel (warna utama mengikuti
+       tema yang dipilih admin). */
+    html[data-theme="emerald"] .admin-brand-icon,html[data-theme="emerald"] .admin-primary{background:linear-gradient(135deg,#0e9f6e,#0a7d56)}
+    html[data-theme="emerald"] .admin-tab.active{background:#0e9f6e;border-color:#0e9f6e;box-shadow:0 5px 12px rgba(14,159,110,.22)}
+    html[data-theme="emerald"] .admin-tab:hover{border-color:#0e9f6e;color:#0e9f6e}
+    html[data-theme="emerald"] .summary-icon{background:#e4f6ee;color:#0e9f6e}
+    html[data-theme="emerald"] .admin-card h2 i{color:#0e9f6e}
+    html[data-theme="royal"] .admin-brand-icon,html[data-theme="royal"] .admin-primary{background:linear-gradient(135deg,#6d28d9,#5b21b6)}
+    html[data-theme="royal"] .admin-tab.active{background:#6d28d9;border-color:#6d28d9;box-shadow:0 5px 12px rgba(109,40,217,.22)}
+    html[data-theme="royal"] .admin-tab:hover{border-color:#6d28d9;color:#6d28d9}
+    html[data-theme="royal"] .summary-icon{background:#f0e9fd;color:#6d28d9}
+    html[data-theme="royal"] .admin-card h2 i{color:#6d28d9}
+    html[data-theme="ocean"] .admin-brand-icon,html[data-theme="ocean"] .admin-primary{background:linear-gradient(135deg,#0d9488,#0f766e)}
+    html[data-theme="ocean"] .admin-tab.active{background:#0d9488;border-color:#0d9488;box-shadow:0 5px 12px rgba(13,148,136,.22)}
+    html[data-theme="ocean"] .admin-tab:hover{border-color:#0d9488;color:#0d9488}
+    html[data-theme="ocean"] .summary-icon{background:#e0f5f2;color:#0d9488}
+    html[data-theme="ocean"] .admin-card h2 i{color:#0d9488}
+    html[data-theme="sunset"] .admin-brand-icon,html[data-theme="sunset"] .admin-primary{background:linear-gradient(135deg,#ea580c,#c2410c)}
+    html[data-theme="sunset"] .admin-tab.active{background:#ea580c;border-color:#ea580c;box-shadow:0 5px 12px rgba(234,88,12,.22)}
+    html[data-theme="sunset"] .admin-tab:hover{border-color:#ea580c;color:#ea580c}
+    html[data-theme="sunset"] .summary-icon{background:#ffedd8;color:#ea580c}
+    html[data-theme="sunset"] .admin-card h2 i{color:#ea580c}
   </style>
 </head>
 <body class="admin-body">
@@ -533,7 +557,7 @@
           <!-- ================= DATA PESERTA ================= -->
           <section id="pane-peserta" class="admin-pane">
             <article class="admin-card" data-admin="true">
-              <div class="admin-card-head"><div><h2><i class="fa-solid fa-layer-group"></i> Rombongan Belajar (VII – IX)</h2><p>Setiap rombel memiliki token ujian sendiri. Peserta login memakai <b>nama depan</b> sebagai username dan token rombel sebagai password.</p></div></div>
+              <div class="admin-card-head"><div><h2><i class="fa-solid fa-layer-group"></i> Rombongan Belajar (VII – IX)</h2><p>Setiap rombel memiliki token ujian sendiri. Peserta login memakai <b>username</b> yang didaftarkan dan token rombel sebagai password. <b>Urutan rombel</b> (VII KH Dewantara, Ahmad Dahlan, ... IX Karanjalemba) diatur oleh admin lewat tombol panah pada kartu rombel di bawah — berlaku di Data Peserta, Monitor, Hasil, Nilai Uraian, Pelanggaran, Rekap Kelas, dan Export.</p></div></div>
               <form id="rombelForm">
                 <div class="admin-form-grid">
                   <div class="admin-field"><label for="rNama">Nama rombel</label><input id="rNama" class="admin-input" maxlength="60" placeholder="Contoh: VII A" required></div>
@@ -547,10 +571,11 @@
             </article>
 
             <article class="admin-card" data-admin="true">
-              <div class="admin-card-head"><div><h2><i class="fa-solid fa-user-plus"></i> Tambah Peserta Ujian</h2><p>Validasi peserta mencegah pemakaian nama palsu. Username otomatis dibuat dari <b>nama depan</b>.</p></div></div>
+              <div class="admin-card-head"><div><h2><i class="fa-solid fa-user-plus"></i> Tambah Peserta Ujian</h2><p>Username ditentukan langsung oleh <b>admin atau guru mapel</b> (bukan otomatis). Aturan username: huruf kecil, tanpa spasi, tanpa titik; angka dan simbol <b>_</b> / <b>-</b> boleh.</p></div></div>
               <form id="participantForm">
                 <div class="admin-form-grid">
-                  <div class="admin-field"><label for="pNama">Nama lengkap peserta</label><input id="pNama" class="admin-input" maxlength="150" placeholder="Contoh: Ahmad Fauzan Ramadhan" required><small id="pUsernamePreview">Username akan dibuat otomatis dari nama depan.</small></div>
+                  <div class="admin-field"><label for="pNama">Nama lengkap peserta</label><input id="pNama" class="admin-input" maxlength="150" placeholder="Contoh: Ahmad Fauzan Ramadhan" required></div>
+                  <div class="admin-field"><label for="pUsername">Username peserta (untuk login)</label><input id="pUsername" class="admin-input" maxlength="60" placeholder="Contoh: ahmadfauzan / ahmad_fauzan" required><small id="pUsernamePreview">Huruf kecil, tanpa spasi, tanpa titik (moh.adit tidak diterima).</small></div>
                   <div class="admin-field"><label for="pRombel">Rombel</label><select id="pRombel" class="admin-input" required><option value="">Pilih rombel</option></select></div>
                   <div class="admin-field"><label for="pNis">NIS (opsional)</label><input id="pNis" class="admin-input" maxlength="40" placeholder="Nomor induk siswa"></div>
                 </div>
@@ -559,7 +584,7 @@
             </article>
 
             <article class="admin-card" data-admin="true">
-              <div class="admin-card-head"><div><h2><i class="fa-solid fa-file-import"></i> Import Data Peserta</h2><p>File CSV/Excel dengan kolom: <b>nama</b>, <b>rombel</b>, dan <b>nis</b> (opsional).</p></div><button id="downloadTemplatePeserta" class="admin-secondary" type="button"><i class="fa-solid fa-download"></i> Unduh Template CSV</button></div>
+              <div class="admin-card-head"><div><h2><i class="fa-solid fa-file-import"></i> Import Data Peserta</h2><p>File CSV/Excel dengan kolom: <b>nama</b>, <b>rombel</b>, <b>username</b> (opsional — bila kosong dibuat dari nama depan), dan <b>nis</b> (opsional).</p></div><button id="downloadTemplatePeserta" class="admin-secondary" type="button"><i class="fa-solid fa-download"></i> Unduh Template CSV</button></div>
               <div class="upload-row">
                 <div class="admin-field"><label for="importPesertaFile">Pilih file peserta</label><input id="importPesertaFile" class="file-input" type="file" accept=".csv,.xlsx,.xls,text/csv"></div>
                 <button id="importPesertaButton" class="admin-primary" type="button"><i class="fa-solid fa-file-arrow-up"></i> Import Peserta</button>
@@ -605,7 +630,7 @@
           <!-- ================= NOTIFIKASI ================= -->
           <section id="pane-notifikasi" class="admin-pane">
             <article class="admin-card">
-              <div class="admin-card-head"><div><h2><i class="fa-solid fa-bell"></i> Pusat Notifikasi</h2><p>Semua informasi aplikasi: login akun, peserta masuk dan selesai, pelanggaran, upload media, import data, perubahan pengaturan, dan export laporan.</p></div><div class="admin-card-actions"><button id="markAllNotif" class="admin-secondary" type="button"><i class="fa-solid fa-check-double"></i> Tandai Dibaca</button><button id="clearNotif" class="admin-danger admin-only-action" type="button"><i class="fa-solid fa-trash-can"></i> Hapus Semua</button><button id="refreshNotif" class="admin-secondary" type="button"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button></div></div>
+              <div class="admin-card-head"><div><h2><i class="fa-solid fa-bell"></i> Pusat Notifikasi</h2><p>Semua informasi aplikasi: login akun, peserta masuk dan selesai, pelanggaran, upload media, import data, perubahan pengaturan, dan export laporan.</p></div><div class="admin-card-actions"><button id="markAllNotif" class="admin-secondary" type="button"><i class="fa-solid fa-check-double"></i> Tandai Dibaca</button><button id="clearNotif" class="admin-danger" type="button"><i class="fa-solid fa-trash-can"></i> Hapus Semua</button><button id="refreshNotif" class="admin-secondary" type="button"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button></div></div>
               <div id="notifList" class="notif-list"><div class="empty-state"><i class="fa-regular fa-bell"></i> Memuat notifikasi...</div></div>
             </article>
           </section>
@@ -632,16 +657,28 @@
                   <div class="admin-field span-2"><label class="small-check"><input id="sUjianAktif" type="checkbox"> Buka ujian ini untuk peserta (tampil pada pilihan mata pelajaran saat login)</label><small>Peserta hanya dapat memilih ujian yang dibuka dan sudah memiliki soal aktif.</small></div>
                   <div class="admin-field span-2"><label class="small-check"><input id="sApplyActive" type="checkbox"> Terapkan perubahan durasi kepada peserta yang sedang aktif/jeda</label></div>
                   <div class="admin-field span-2" style="border:1.5px dashed #c7d7e6;border-radius:12px;padding:14px;background:#f8fbff">
-                    <label for="sDurasiRealtime"><i class="fa-solid fa-bolt" style="color:#f59e0b"></i> Ubah Durasi Realtime (tanpa menyimpan pengaturan lain)</label>
+                    <label for="sPesertaDurasi"><i class="fa-solid fa-bolt" style="color:#f59e0b"></i> Ubah Durasi Realtime (tanpa menyimpan pengaturan lain)</label>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+                      <select id="sPesertaDurasi" class="admin-input" style="max-width:280px">
+                        <option value="">Semua peserta aktif</option>
+                      </select>
                       <input id="sDurasiRealtime" class="admin-input" type="number" min="1" max="300" style="max-width:150px" placeholder="Menit baru">
-                      <button id="btnTerapkanDurasi" class="admin-primary" type="button"><i class="fa-solid fa-clock-rotate-left"></i> Terapkan ke Peserta Aktif</button>
+                      <button id="btnTerapkanDurasi" class="admin-primary" type="button"><i class="fa-solid fa-clock-rotate-left"></i> Terapkan</button>
                     </div>
-                    <small>Waktu yang sudah terpakai peserta dipertahankan, sisanya dihitung ulang dari durasi baru. Peserta melihat perubahannya dalam ≤10 detik.</small>
+                    <small>Pilih satu peserta untuk mengubah waktunya saja, atau biarkan "Semua peserta aktif" untuk semua. Waktu yang sudah terpakai dipertahankan, sisanya dihitung ulang dari durasi baru. Perubahan terlihat peserta dalam ≤10 detik.</small>
                   </div>
                 </div>
                 <button class="admin-primary" type="submit"><i class="fa-solid fa-floppy-disk"></i> Simpan Pengaturan</button>
               </form>
+            </article>
+
+            <article class="admin-card" data-admin="true">
+              <div class="admin-card-head"><div><h2><i class="fa-solid fa-palette"></i> Tema Tampilan Aplikasi</h2><p>Pilih salah satu dari 5 tema profesional. Berlaku langsung untuk halaman login, ruang ujian peserta, dan panel ini.</p></div></div>
+              <div class="inline-row">
+                <div class="admin-field"><label for="sTema">Tema</label><select id="sTema" class="admin-input"></select></div>
+                <button id="btnSimpanTema" class="admin-primary" type="button"><i class="fa-solid fa-palette"></i> Terapkan Tema</button>
+              </div>
+            </article>
             </article>
 
             <article class="admin-card" data-admin="true">
@@ -763,7 +800,7 @@
         <input id="epId" type="hidden">
         <div class="admin-form-grid">
           <div class="admin-field span-2"><label for="epNama">Nama lengkap</label><input id="epNama" class="admin-input" maxlength="150" required></div>
-          <div class="admin-field"><label for="epUsername">Username</label><input id="epUsername" class="admin-input" maxlength="60" required><small>Huruf kecil, tanpa spasi. Titik diperbolehkan, contoh: m.andi</small></div>
+          <div class="admin-field"><label for="epUsername">Username</label><input id="epUsername" class="admin-input" maxlength="60" required><small>Huruf kecil, tanpa spasi, tanpa titik (moh.adit ditolak); angka dan simbol _ / - boleh.</small></div>
           <div class="admin-field"><label for="epRombel">Rombel</label><select id="epRombel" class="admin-input" required></select></div>
           <div class="admin-field"><label for="epNis">NIS</label><input id="epNis" class="admin-input" maxlength="40" placeholder="Nomor induk siswa"></div>
           <div class="admin-field"><label for="epKehadiran">Status kehadiran</label><select id="epKehadiran" class="admin-input">
@@ -867,5 +904,6 @@
     var SESI_HANDOFF = <?!= (typeof SESI_HANDOFF !== 'undefined' && SESI_HANDOFF) ? SESI_HANDOFF : 'null'; ?>;
   </script>
   <?!= include('admin-script'); ?>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33d21b13aa98be4',t:'MTc4ODE5MDgwNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33dcf5dbb5920bb',t:'MTc4ODE5NzkxOA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v3d52b47920f24c319d37e2661827c42b1787588026925" integrity="sha512-d9sL6GJLXn6fInD1+TVXhTcQOsmxeHfmHAvwGDIxp5TO+uo1fiWW7mHomMj4MLRlCsJDTqXzWLHJFFlPCEIj/A==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
+</body>
 </html>
