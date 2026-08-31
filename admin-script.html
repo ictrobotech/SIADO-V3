@@ -92,7 +92,7 @@ function adminApi(action, payload) {
       selesai = true;
       reject(new Error('Server tidak merespons untuk "' + action +
         '". Periksa koneksi internet, lalu muat ulang halaman. Data mungkin sudah tersimpan.'));
-    }, 45000);
+    }, 30000);
 
     google.script.run
       .withSuccessHandler(function(hasil) {
@@ -3338,7 +3338,15 @@ async function loadParticipants(paksa) {
     isiPilihanRombelAdmin_(ADMIN.rombel);
     terapkanFilterPeserta_();
     ADMIN.pesertaRetried = false;
+    // Instrumen kecepatan: tampilkan toast hanya bila server lambat (> 5 dtk),
+    // dan selalu catat durasi ke konsol untuk keperluan diagnosa.
+    console.log('[getDataPeserta] sukses, ' + (result.durasiMs || 0) + ' ms');
+    if (result.durasiMs > 5000) {
+      showToast('Data peserta dimuat dalam ' + (result.durasiMs / 1000).toFixed(1) + ' dtk', 'info');
+    }
   } catch (error) {
+    // Catat pesan error asli dari server untuk diagnosa.
+    console.error('[getDataPeserta] gagal:', error && error.message);
     // Cold start / gangguan sesaat: coba sekali lagi otomatis.
     if (!ADMIN.pesertaRetried && (!ADMIN.participants || !ADMIN.participants.length)) {
       ADMIN.pesertaRetried = true;
@@ -4380,4 +4388,4 @@ function escapeAdmin(value) { return String(value === undefined || value === nul
 function readFileAsDataUrl(file) { return new Promise(function(resolve, reject) { var reader = new FileReader(); reader.onload = function() { resolve(reader.result); }; reader.onerror = reject; reader.readAsDataURL(file); }); }
 function debounce(fn, wait) { var timeout; return function() { var args = arguments; clearTimeout(timeout); timeout = setTimeout(function() { fn.apply(null, args); }, wait); }; }
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33e977e58fc8823',t:'MTc4ODIwNjExNQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33ed77c5c8298ed',t:'MTc4ODIwODczNg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
