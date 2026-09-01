@@ -3,11 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <!-- Judul tab browser. Nilai ini ditimpa oleh JUDUL_APLIKASI / JUDUL_PANEL
+       pada blok skrip di bawah, jadi cukup ubah di satu tempat itu saja. -->
   <title>SIADO V3.3</title>
 
   <meta name="description" content="Aplikasi Ujian Online SMP Labschool Untad Palu." />
   <meta name="theme-color" content="#0f172a" />
   <meta name="robots" content="noindex" />
+
+  <!-- ============================================================
+       MODE APLIKASI (menghilangkan notifikasi layar penuh browser).
+       Bila peserta memasang aplikasi ini lewat menu browser
+       "Tambahkan ke Layar Utama", aplikasi terbuka tanpa bilah alamat
+       sehingga notifikasi "swipe down to exit full screen" TIDAK pernah
+       muncul lagi (tidak ada mode layar penuh yang perlu diumumkan).
+       ============================================================ -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="SIADO" />
 
   <!-- Ikon aplikasi di tab browser. LGS.png harus berada di folder yang sama. -->
   <link rel="icon" type="image/png" href="LGS.png" />
@@ -153,6 +168,13 @@
       // ================================================================
       var URL_APLIKASI = 'https://script.google.com/macros/s/AKfycbymk-ciHeoVd9qpSAddQElo8wnVK5UpnXNK657gKL7UPkCBbZyg2Xsn7V2p00GGAD0BqA/exec';
 
+      // ================================================================
+      // TEKS PADA TAB BROWSER. Cukup ubah dua baris di bawah ini.
+      // Contoh: 'SMP LABSCHOOL UNTAD PALU' atau 'Ujian Online SMP Labschool'.
+      // ================================================================
+      var JUDUL_APLIKASI = 'SIADO V3.3';
+      var JUDUL_PANEL = 'Kelola Ujian | SIADO V3.3';
+
       var ASAL_APLIKASI = 'https://script.google.com';
       var bingkai = document.getElementById('app');
       var tirai = document.getElementById('memuat');
@@ -195,6 +217,63 @@
           }
         } catch (error) {}
       }
+
+      /* ============================================================
+       * LAYAR PENUH DIKELOLA PEMBUNGKUS
+       *
+       * Sebelumnya bingkai Apps Script yang meminta layar penuh, sehingga
+       * notifikasi browser menampilkan alamat panjang
+       * "...-script.googleusercontent.com - To exit full screen...".
+       * Dengan permintaan dipindah ke jendela induk, notifikasi itu
+       * menampilkan domain sekolah yang rapi, muncul sekali saja, dan
+       * TIDAK muncul sama sekali bila aplikasi dijalankan dari ikon
+       * layar utama (mode aplikasi).
+       * ============================================================ */
+      function modeAplikasiPenuh() {
+        try {
+          if (window.navigator.standalone === true) return true;
+          if (!window.matchMedia) return false;
+          return window.matchMedia('(display-mode: fullscreen)').matches ||
+                 window.matchMedia('(display-mode: standalone)').matches;
+        } catch (error) { return false; }
+      }
+
+      function sedangLayarPenuh() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement) || modeAplikasiPenuh();
+      }
+
+      function kirimStatusLayarPenuh() {
+        kirimKeAplikasi({
+          aksi: 'statusLayarPenuh',
+          aktif: sedangLayarPenuh(),
+          standalone: modeAplikasiPenuh()
+        });
+      }
+
+      function mintaLayarPenuh() {
+        // Mode aplikasi sudah tanpa bilah browser: tidak perlu layar penuh.
+        if (modeAplikasiPenuh() || sedangLayarPenuh()) { kirimStatusLayarPenuh(); return; }
+        var el = document.documentElement;
+        var minta = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (!minta) { kirimStatusLayarPenuh(); return; }
+        try {
+          var hasil = minta.call(el, { navigationUI: 'hide' });
+          if (hasil && hasil.then) hasil.then(kirimStatusLayarPenuh).catch(kirimStatusLayarPenuh);
+          else kirimStatusLayarPenuh();
+        } catch (error) { kirimStatusLayarPenuh(); }
+      }
+
+      function keluarLayarPenuh() {
+        try {
+          var keluar = document.exitFullscreen || document.webkitExitFullscreen;
+          if ((document.fullscreenElement || document.webkitFullscreenElement) && keluar) keluar.call(document);
+        } catch (error) {}
+        kirimStatusLayarPenuh();
+      }
+
+      ['fullscreenchange', 'webkitfullscreenchange'].forEach(function (nama) {
+        document.addEventListener(nama, kirimStatusLayarPenuh);
+      });
 
       /** Melaporkan pelanggaran yang terdeteksi pembungkus agar dicatat server. */
       function laporPelanggaran(jenis, detail) {
@@ -332,13 +411,15 @@
       // Parameter page/hs tetap didukung agar tautan lama tidak rusak,
       // tetapi TIDAK diperlukan: pemilihan guru/proktor dilakukan lewat
       // kotak centang pada layar login.
+      document.title = JUDUL_APLIKASI;
+
       var params = new URLSearchParams(window.location.search);
       var halamanAwal = params.get('page');
       var kodeAwal = params.get('hs');
 
       bingkai.src = alamatAplikasi(halamanAwal, kodeAwal);
       if (halamanAwal === 'admin') {
-        document.title = 'Kelola Ujian | SIADO V3.4';
+        document.title = JUDUL_PANEL;
         pesan.textContent = 'Memuat Kelola Ujian\u2026';
       }
 
@@ -358,9 +439,15 @@
         if (!ev || !ev.data || ev.data.sumber !== 'siado') return;
         if (String(ev.origin || '').indexOf(ASAL_APLIKASI) !== 0) return;
 
+        // Permintaan layar penuh dari aplikasi di dalam bingkai.
+        if (ev.data.aksi === 'layarPenuh') { mintaLayarPenuh(); return; }
+        if (ev.data.aksi === 'keluarLayarPenuh') { keluarLayarPenuh(); return; }
+        if (ev.data.aksi === 'cekLayarPenuh') { kirimStatusLayarPenuh(); return; }
+
         // REVISI 3.4: status ujian menghidupkan/mematikan penjaga keamanan.
         if (ev.data.aksi === 'ujian') {
           ujianBerlangsung = String(ev.data.status || '') === 'mulai';
+          kirimStatusLayarPenuh();
           if (!ujianBerlangsung) {
             jumlahTombolKembali = 0;
             samarkanBingkai(false);
@@ -375,7 +462,7 @@
         ujianBerlangsung = false;
         samarkanBingkai(false);
         tampilkanTirai(keAdmin ? 'Membuka Kelola Ujian\u2026' : 'Membuka halaman ujian\u2026');
-        document.title = keAdmin ? 'Kelola Ujian | SIADO V3.4' : 'SIADO V3.4';
+        document.title = keAdmin ? JUDUL_PANEL : JUDUL_APLIKASI;
 
         // Alamat dari aplikasi dipakai hanya bila benar menunjuk ke Apps Script.
         var tujuan = String(ev.data.url || '');
@@ -383,9 +470,20 @@
         bingkai.src = tujuan;
       });
 
-      bingkai.addEventListener('load', sembunyikanTirai);
+      bingkai.addEventListener('load', function () {
+        sembunyikanTirai();
+        window.setTimeout(kirimStatusLayarPenuh, 400);
+      });
+
+      // Service worker sederhana (tanpa cache) agar browser mengenali halaman
+      // ini sebagai aplikasi yang dapat dipasang ke layar utama.
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('sw.js').catch(function () {});
+        });
+      }
       window.setTimeout(sembunyikanTirai, 10000); // jaring pengaman
     })();
   </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a345989e3bb2f44c',t:'MTc4ODI3OTU2MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a345e24a6d024cbf',t:'MTc4ODI4MjU3OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
