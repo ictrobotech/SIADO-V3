@@ -1655,6 +1655,10 @@ var GUARD = {
   splitBerturut: 0,
   splitUlangTimer: null,
   notisMobileTampil: false,
+  // REVISI 3.5b: layar penuh dikelola jendela induk (pembungkus GitHub Pages)
+  // agar notifikasi browser tidak menampilkan alamat googleusercontent.
+  layarPenuhPembungkus: false,
+  standalonePembungkus: false,
   KEY_KELUAR_PAKSA: 'ao_keluar_paksa_v1'
 };
 
@@ -1687,6 +1691,26 @@ function pasangPendengarPembungkus_() {
     if (!event || !event.data || event.data.sumber !== 'siado-pembungkus') return;
     var asalSah = asalPembungkus_();
     if (asalSah && String(event.origin || '') !== asalSah) return;
+
+    // Status layar penuh selalu diproses, termasuk sebelum ujian dimulai.
+    if (event.data.aksi === 'statusLayarPenuh') {
+      var sebelumnya = GUARD.layarPenuhPembungkus;
+      GUARD.layarPenuhPembungkus = !!event.data.aktif;
+      GUARD.standalonePembungkus = !!event.data.standalone;
+      if (GUARD.layarPenuhPembungkus) {
+        UJIAN.fullscreenActivated = true;
+        UJIAN.fullscreenRestorePending = false;
+        sembunyikanGerbangLayarPenuh_();
+      } else if (UJIAN.aktif && sebelumnya) {
+        // Peserta keluar dari layar penuh lewat jendela induk.
+        if (bolehTampilGerbang_()) tampilkanGerbangLayarPenuh_();
+        if (!document.hidden && !UJIAN.tabKeluarAktif) {
+          reportViolation('keluar_fullscreen', 'Keluar dari mode layar penuh.');
+        }
+      }
+      return;
+    }
+
     if (!UJIAN.aktif) return;
     if (event.data.aksi === 'pelanggaran') {
       var jenis = String(event.data.jenis || 'pindah_tab');
@@ -1717,11 +1741,33 @@ function ingatkanKeamananMobile_() {
 }
 
 function fullscreenDidukung_() {
+  // Bila dibuka lewat pembungkus, jendela induk yang memiliki kemampuan
+  // layar penuh, jadi tetap dianggap didukung.
+  if (adaPembungkus_()) return true;
   var element = document.documentElement;
   return !!(element.requestFullscreen || element.webkitRequestFullscreen);
 }
 
+/**
+ * Mode aplikasi (dipasang ke layar utama / PWA): tidak ada bilah browser,
+ * sehingga layar sudah penuh dan tidak perlu meminta fullscreen sama sekali.
+ * Inilah cara satu-satunya menghilangkan notifikasi bawaan browser
+ * "swipe down to exit full screen", karena notifikasi itu milik browser dan
+ * tidak dapat dihapus oleh halaman web mana pun.
+ */
+function modeAplikasiPenuh_() {
+  if (GUARD.standalonePembungkus) return true;
+  try {
+    if (window.navigator.standalone === true) return true;
+    if (!window.matchMedia) return false;
+    return window.matchMedia('(display-mode: fullscreen)').matches ||
+           window.matchMedia('(display-mode: standalone)').matches;
+  } catch (error) { return false; }
+}
+
 function sedangLayarPenuh_() {
+  // Layar penuh milik jendela induk juga dihitung sebagai layar penuh.
+  if (GUARD.layarPenuhPembungkus || modeAplikasiPenuh_()) return true;
   return !!(document.fullscreenElement || document.webkitFullscreenElement ||
     document.mozFullScreenElement || document.msFullscreenElement ||
     document.webkitIsFullScreen);
@@ -1738,6 +1784,9 @@ function aktifkanModeUjianAman_() {
   pasangBlokirRekamLayar_();
   pasangPendengarPembungkus_();
   kabariPembungkus_('mulai');
+  if (adaPembungkus_()) {
+    try { window.parent.postMessage({ sumber: 'siado', aksi: 'cekLayarPenuh' }, '*'); } catch (error) {}
+  }
   mulaiPengawasLayarPenuh_();
   laporKeluarPaksaTertunda_();
   requestFullscreenSafe();
@@ -2079,7 +2128,9 @@ function bindSecurityEvents() {
     document.addEventListener(namaEvent, function() {
       if (!UJIAN.aktif || UJIAN.jeda || UJIAN.selesaiDiproses) return;
       if (sedangLayarPenuh_() || !fullscreenDidukung_()) return;
-      if (Date.now() - GUARD.fsPercobaanTerakhir < 1500) return;
+      // Jeda 5 detik: setiap permintaan layar penuh memunculkan notifikasi
+      // bawaan browser, jadi jangan sampai bertubi-tubi.
+      if (Date.now() - GUARD.fsPercobaanTerakhir < 5000) return;
       GUARD.fsPercobaanTerakhir = Date.now();
       requestFullscreenSafe(true);
     }, true);
@@ -2561,8 +2612,37 @@ function requestFullscreenSafe(dariGestur) {
     sembunyikanGerbangLayarPenuh_();
     return Promise.resolve(true);
   }
+  // Jendela induk (pembungkus) yang meminta layar penuh bila tersedia:
+  // notifikasi browser jadi menampilkan domain sekolah, bukan alamat panjang
+  // googleusercontent, dan hanya muncul satu kali.
+  if (adaPembungkus_()) {
+    try {
+      window.parent.postMessage({ sumber: 'siado', aksi: 'layarPenuh' }, '*');
+    } catch (error) {}
+    return new Promise(function(resolve) {
+      var batas = 0;
+      var cek = window.setInterval(function() {
+        batas += 1;
+        if (GUARD.layarPenuhPembungkus) {
+          window.clearInterval(cek);
+          resolve(true);
+          return;
+        }
+        if (batas >= 8) {                     // ± 800 ms
+          window.clearInterval(cek);
+          resolve(mintaLayarPenuhLokal_(dariGestur));
+        }
+      }, 100);
+    });
+  }
+  return Promise.resolve(mintaLayarPenuhLokal_(dariGestur));
+}
+
+/** Permintaan layar penuh langsung dari halaman ujian (tanpa pembungkus). */
+function mintaLayarPenuhLokal_(dariGestur) {
+  var element = document.documentElement;
   var requestMethod = element.requestFullscreen || element.webkitRequestFullscreen;
-  if (!requestMethod) return Promise.resolve(false); // mis. Safari iOS
+  if (!requestMethod) return false; // mis. Safari iOS
   var sukses = function() {
     UJIAN.fullscreenActivated = true;
     UJIAN.fullscreenRestorePending = false;
@@ -2577,14 +2657,18 @@ function requestFullscreenSafe(dariGestur) {
   };
   try {
     var request = requestMethod.call(element, { navigationUI: 'hide' });
-    if (request && request.then) return request.then(sukses).catch(gagal);
-    return Promise.resolve(sukses());
+    if (request && request.then) { request.then(sukses).catch(gagal); return true; }
+    return sukses();
   } catch (error) {
-    return Promise.resolve(gagal());
+    return gagal();
   }
 }
 
 function exitFullscreenSafe() {
+  if (adaPembungkus_()) {
+    try { window.parent.postMessage({ sumber: 'siado', aksi: 'keluarLayarPenuh' }, '*'); } catch (error) {}
+  }
+  GUARD.layarPenuhPembungkus = false;
   try {
     var exitMethod = document.exitFullscreen || document.webkitExitFullscreen;
     if (sedangLayarPenuh_() && exitMethod) exitMethod.call(document);
@@ -2798,4 +2882,4 @@ function urlGambarTampil_(url, lebar) {
   return 'https://drive.google.com/thumbnail?id=' + id + '&sz=w' + (lebar || 1600);
 }
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a34590a37e58b251',t:'MTc4ODI3OTIzNQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a345de73dc4b6029',t:'MTc4ODI4MjQyMg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
