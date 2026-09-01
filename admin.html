@@ -480,6 +480,7 @@
                 <div><h2><i class="fa-solid fa-unlock-keyhole"></i> Pemulihan Peserta Terdiskualifikasi</h2><p>Buka kembali akses peserta yang terkena diskualifikasi agar dapat login dan mengikuti ujian lagi.</p></div>
                 <div class="admin-card-actions">
                   <button id="pulihkanSemuaDq" class="admin-danger admin-only-action" type="button"><i class="fa-solid fa-users-rays"></i> Pulihkan Semua</button>
+                  <button id="resetDataDq" class="admin-danger admin-only-action" type="button"><i class="fa-solid fa-broom"></i> Reset Data</button>
                   <button id="refreshDiskualifikasi" class="admin-secondary" type="button"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
                 </div>
               </div>
@@ -908,5 +909,46 @@
     var SESI_HANDOFF = <?!= (typeof SESI_HANDOFF !== 'undefined' && SESI_HANDOFF) ? SESI_HANDOFF : 'null'; ?>;
   </script>
   <?!= include('admin-script'); ?>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33e68c18b52fdce',t:'MTc4ODIwNDIwMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+  <script>
+  /* ================================================================
+   * PENGAWAS INDEPENDEN - blok skrip TERPISAH dari admin-script.
+   * Bila blok admin-script gagal diparse (file terpotong saat disalin,
+   * versi lama, dll.), seluruh isinya TIDAK berjalan termasuk kotak
+   * error yang ada di dalamnya. Blok ini berdiri sendiri sehingga
+   * tetap berjalan dan menampilkan pesan di layar.
+   * ================================================================ */
+  (function() {
+    function kotakPesan(judul, detail) {
+      try {
+        var div = document.getElementById('fatalErrorBox');
+        if (!div) {
+          div = document.createElement('div');
+          div.id = 'fatalErrorBox';
+          div.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#dc2626;color:#fff;padding:14px 18px;font:13px/1.5 monospace;white-space:pre-wrap;word-break:break-word;';
+          document.body.appendChild(div);
+        }
+        div.style.display = 'block';
+        div.textContent = judul + '\n' + (detail || '');
+      } catch (e) {}
+    }
+    window.addEventListener('error', function(e) {
+      kotakPesan('Kesalahan JavaScript: ' + (e.message || 'unknown'),
+        (e.filename || '') + ' baris ' + (e.lineno || '') + ':' + (e.colno || ''));
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      var alasan = (e && e.reason && (e.reason.message || e.reason)) || e || '';
+      kotakPesan('Janji gagal (unhandled rejection):', String(alasan));
+    });
+    // Beberapa saat setelah halaman siap, pastikan skrip utama benar-benar
+    // berjalan. Kalau tidak, tampilkan peringatan alih-alih layar putih.
+    window.setTimeout(function() {
+      if (typeof window.ADMIN === 'undefined' || typeof window.loadParticipants !== 'function') {
+        kotakPesan('Skrip panel (admin-script) GAGAL DIMUAT.',
+          'File "admin-script" di deployment kemungkinan terpotong saat disalin, masih versi lama, atau tidak lengkap. ' +
+          'Salin ulang SELURUH isi revisi/admin-script.html ke file "admin-script", lalu Deploy > New version.');
+      }
+    }, 1500);
+  })();
+  </script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3443fb15e00f408',t:'MTc4ODI2NTQzMw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
