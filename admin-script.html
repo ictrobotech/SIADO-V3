@@ -3,6 +3,34 @@
  * admin-script.html - Panel admin realtime
  * ================================================================ */
 
+/* Penampil error global: bila ada kesalahan JavaScript di panel,
+ * tampilkan teks errornya di layar (bukan layar putih) agar mudah
+ * didiagnosis. */
+(function() {
+  function tampilError(judul, detail) {
+    try {
+      var div = document.getElementById('fatalErrorBox');
+      if (!div) {
+        div = document.createElement('div');
+        div.id = 'fatalErrorBox';
+        div.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#dc2626;color:#fff;' +
+          'padding:14px 18px;font:13px/1.5 monospace;white-space:pre-wrap;word-break:break-word;';
+        document.body.appendChild(div);
+      }
+      div.style.display = 'block';
+      div.textContent = judul + '\n' + (detail || '');
+    } catch (abaikan) {}
+  }
+  window.addEventListener('error', function(e) {
+    tampilError('Kesalahan JavaScript: ' + (e.message || 'unknown'),
+      (e.filename || '') + ' baris ' + (e.lineno || '') + ':' + (e.colno || ''));
+  });
+  window.addEventListener('unhandledrejection', function(e) {
+    var alasan = (e && e.reason && (e.reason.message || e.reason)) || e || '';
+    tampilError('Janji gagal (unhandled rejection):', String(alasan));
+  });
+})();
+
 var ADMIN = {
   token: '',
   username: '',
