@@ -55,6 +55,9 @@ var UJIAN = {
   // kembali sebelum batas waktu tidak dihitung pelanggaran.
   layarMatiTimer: null,
   layarMatiGrace: 5,
+  // REVISI 3.5: berapa kali absen singkat (di bawah masa tenggang) yang masih
+  // dimaafkan dalam 3 menit sebelum dicatat sebagai pelanggaran pindah tab.
+  maksAbsenSingkat: 3,
   publicConfig: null,
   brandingVersion: '',
   bgVersion: '',
@@ -1646,6 +1649,12 @@ var GUARD = {
   displayMediaDibungkus: false,
   pendengarPembungkus: false,
   peringatanCadangan: {},
+  // REVISI 3.5 (smartphone)
+  absenAktif: null,
+  absenSingkat: [],
+  splitBerturut: 0,
+  splitUlangTimer: null,
+  notisMobileTampil: false,
   KEY_KELUAR_PAKSA: 'ao_keluar_paksa_v1'
 };
 
@@ -1688,6 +1697,25 @@ function pasangPendengarPembungkus_() {
 }
 
 /* ---------------------- UTILITAS LAYAR PENUH ---------------------- */
+/**
+ * Pengingat khusus perangkat mobile.
+ *
+ * Safari iPhone tidak mendukung Fullscreen API sama sekali, sehingga gerbang
+ * layar penuh tidak dapat dipakai di sana. Peserta diberi tahu secara terbuka
+ * bahwa perpindahan aplikasi tetap terpantau, agar tidak merasa "aman".
+ */
+function ingatkanKeamananMobile_() {
+  if (!isMobileDevice() || GUARD.notisMobileTampil) return;
+  GUARD.notisMobileTampil = true;
+  if (!fullscreenDidukung_()) {
+    window.setTimeout(function() {
+      if (!UJIAN.aktif) return;
+      tampilkanToastPeserta_('Perangkat ini tidak mendukung layar penuh. Jangan berpindah aplikasi: ' +
+        'setiap perpindahan tetap tercatat dan dilaporkan ke pengawas.', true);
+    }, 900);
+  }
+}
+
 function fullscreenDidukung_() {
   var element = document.documentElement;
   return !!(element.requestFullscreen || element.webkitRequestFullscreen);
@@ -1703,6 +1731,9 @@ function sedangLayarPenuh_() {
 function aktifkanModeUjianAman_() {
   GUARD.navigasiResmi = false;
   document.body.classList.add('ujian-berlangsung');
+  // Kelas pada <html> mematikan tarik-untuk-muat-ulang (pull to refresh) di HP.
+  document.documentElement.classList.add('ujian-berlangsung');
+  ingatkanKeamananMobile_();
   pasangPerangkapTombolKembali_();
   pasangBlokirRekamLayar_();
   pasangPendengarPembungkus_();
@@ -1717,6 +1748,9 @@ function matikanModeUjianAman_() {
   kabariPembungkus_('selesai');
   Object.keys(GUARD.peringatanCadangan).forEach(batalkanPeringatanCadangan_);
   document.body.classList.remove('ujian-berlangsung');
+  document.documentElement.classList.remove('ujian-berlangsung');
+  GUARD.absenSingkat = [];
+  GUARD.notisMobileTampil = false;
   hentikanPengawasLayarPenuh_();
   sembunyikanGerbangLayarPenuh_();
   sembunyikanPerisaiLayar_();
@@ -1947,7 +1981,9 @@ function bindSecurityEvents() {
         'Peserta meninggalkan tampilan soal pada perangkat mobile.' :
         'Halaman ujian tidak lagi terlihat pada perangkat desktop.');
     } else {
-      batalTenggangLayarMati_();
+      // Perhitungan absen mobile diselesaikan di sini (bukan oleh timer latar
+      // belakang yang dibekukan browser HP).
+      selesaikanAbsenMobile_();
       samarkanKontenUjian_(false);
       UJIAN.tabKeluarAktif = false;
       // Browser mobile menunda request saat aplikasi di background; kirim ulang
@@ -1996,10 +2032,20 @@ function bindSecurityEvents() {
   });
 
   window.addEventListener('resize', function() {
-    if (!UJIAN.aktif || isMobileDevice()) return;
+    if (!UJIAN.aktif) return;
     clearTimeout(splitTimer);
-    splitTimer = setTimeout(checkSplitScreen, 900);
+    // Mobile diberi jeda lebih panjang agar papan ketik/bilah alamat stabil dulu.
+    splitTimer = setTimeout(checkSplitScreen, isMobileDevice() ? 1500 : 900);
   });
+
+  // Android mengubah visualViewport saat masuk mode layar terbagi.
+  if (window.visualViewport && window.visualViewport.addEventListener) {
+    window.visualViewport.addEventListener('resize', function() {
+      if (!UJIAN.aktif || !isMobileDevice()) return;
+      clearTimeout(splitTimer);
+      splitTimer = setTimeout(checkSplitScreen, 1500);
+    });
+  }
 
   window.addEventListener('orientationchange', function() {
     if (UJIAN.aktif && isMobileDevice() && window.matchMedia('(orientation: landscape)').matches) {
@@ -2230,44 +2276,159 @@ function catatKeluarTampilanSoal_(detail) {
   reportViolation('pindah_tab', detail, eventId);
 }
 
-/**
- * Masa tenggang layar HP mati (mobile). Pelanggaran pindah tab baru dicatat
- * bila layar masih tersembunyi setelah LAYAR_MATI_GRACE_SECONDS — artinya
- * peserta benar-benar meninggalkan tampilan soal, bukan sekadar layar mati.
- */
-function antreCekLayarMati_(detail) {
-  if (!UJIAN.aktif || UJIAN.jeda || UJIAN.layarMatiTimer) return;
-  UJIAN.fullscreenRestorePending = true;
-  var graceMs = Math.max(2, Math.min(30, Number(UJIAN.layarMatiGrace || 5))) * 1000;
-  UJIAN.layarMatiTimer = setTimeout(function() {
-    UJIAN.layarMatiTimer = null;
-    if (!UJIAN.aktif || UJIAN.jeda) return;
-    if (!document.hidden) return; // layar sudah hidup kembali sebelum batas
-    // Masih tersembunyi melewati masa tenggang => benar-benar pindah/keluar.
-    UJIAN.tabKeluarAktif = true;
-    UJIAN.urutanKeluarTab += 1;
-    UJIAN.pelanggaranPindahTab = Math.min(3, Number(UJIAN.pelanggaranPindahTab || 0) + 1);
-    document.getElementById('violationCount').textContent = UJIAN.pelanggaranPindahTab;
-    reportViolation('pindah_tab', detail, 'tab-' + UJIAN.urutanKeluarTab + '-' + Date.now());
-  }, graceMs);
+/* ============================================================
+ * ABSEN PERANGKAT MOBILE: LAYAR MATI vs PINDAH APLIKASI
+ *
+ * PERBAIKAN PENTING (REVISI 3.5). Versi sebelumnya menentukan pelanggaran
+ * memakai setTimeout selama masa tenggang. Padahal Android dan iOS
+ * MEMBEKUKAN timer begitu aplikasi berada di latar belakang, sehingga timer
+ * baru berjalan ketika peserta sudah kembali — saat itu document.hidden
+ * sudah false dan pelanggaran TIDAK PERNAH tercatat. Akibatnya blokir pindah
+ * tab praktis tidak berfungsi di HP.
+ *
+ * Sekarang lama absen dihitung dari selisih waktu nyata (Date.now) pada saat
+ * peserta kembali, sehingga tidak bergantung pada timer latar belakang.
+ * ============================================================ */
+function graceLayarMatiMs_() {
+  return Math.max(2, Math.min(30, Number(UJIAN.layarMatiGrace || 5))) * 1000;
 }
 
-/** Membatalkan tenggang layar mati bila layar hidup kembali sebelum batas. */
+function antreCekLayarMati_(detail) {
+  if (!UJIAN.aktif || UJIAN.jeda || GUARD.absenAktif) return;
+  UJIAN.fullscreenRestorePending = true;
+  UJIAN.urutanKeluarTab += 1;
+  GUARD.absenAktif = {
+    mulai: Date.now(),
+    detail: detail || 'Peserta meninggalkan tampilan soal pada perangkat mobile.',
+    // eventId dikunci sejak awal absen supaya pencatatan lewat timer maupun
+    // lewat kepulangan peserta tidak pernah dihitung dua kali oleh server.
+    eventId: 'tab-' + UJIAN.urutanKeluarTab + '-' + Date.now(),
+    dicatat: false
+  };
+  // Timer hanya bonus untuk perangkat yang masih menjalankannya di latar belakang.
+  UJIAN.layarMatiTimer = window.setTimeout(function() {
+    UJIAN.layarMatiTimer = null;
+    if (!UJIAN.aktif || UJIAN.jeda || !document.hidden || !GUARD.absenAktif) return;
+    catatAbsenMobile_(Math.round((Date.now() - GUARD.absenAktif.mulai) / 1000));
+  }, graceLayarMatiMs_());
+}
+
+/** Mencatat satu absen mobile sebagai pelanggaran pindah tab (idempoten). */
+function catatAbsenMobile_(durasiDetik) {
+  var absen = GUARD.absenAktif;
+  if (!absen || absen.dicatat) return;
+  absen.dicatat = true;
+  UJIAN.tabKeluarAktif = true;
+  UJIAN.pelanggaranPindahTab = Math.min(3, Number(UJIAN.pelanggaranPindahTab || 0) + 1);
+  document.getElementById('violationCount').textContent = UJIAN.pelanggaranPindahTab;
+  reportViolation('pindah_tab',
+    absen.detail + ' Meninggalkan aplikasi sekitar ' + Math.max(1, Number(durasiDetik || 0)) + ' detik.',
+    absen.eventId);
+}
+
+/** Dipanggil ketika tampilan soal terlihat kembali pada perangkat mobile. */
+function selesaikanAbsenMobile_() {
+  if (UJIAN.layarMatiTimer) {
+    clearTimeout(UJIAN.layarMatiTimer);
+    UJIAN.layarMatiTimer = null;
+  }
+  var absen = GUARD.absenAktif;
+  if (!absen) return;
+  var durasiDetik = Math.round((Date.now() - absen.mulai) / 1000);
+  if (!absen.dicatat && (durasiDetik * 1000) >= graceLayarMatiMs_()) {
+    catatAbsenMobile_(durasiDetik);       // benar-benar meninggalkan aplikasi
+    GUARD.absenAktif = null;
+    return;
+  }
+  GUARD.absenAktif = null;
+  if (!absen.dicatat) akumulasiAbsenSingkat_(durasiDetik);
+}
+
+/**
+ * Absen singkat (layar mati sekejap, notifikasi masuk) tetap dimaafkan, tetapi
+ * diakumulasi. Bila terjadi berulang kali dalam 3 menit, peserta jelas sedang
+ * bolak-balik meninggalkan aplikasi sehingga dicatat sebagai pelanggaran.
+ */
+function akumulasiAbsenSingkat_(durasiDetik) {
+  var sekarang = Date.now();
+  GUARD.absenSingkat = GUARD.absenSingkat.filter(function(waktu) { return sekarang - waktu < 180000; });
+  GUARD.absenSingkat.push(sekarang);
+  var maks = Math.max(2, Math.min(10, Number(UJIAN.maksAbsenSingkat || 3)));
+  var sisa = maks - GUARD.absenSingkat.length;
+  if (sisa > 0) {
+    peringatanRingan_('Anda meninggalkan tampilan soal ' + Math.max(1, durasiDetik) + ' detik. ' +
+      'Jangan berpindah aplikasi — ' + sisa + ' kali lagi akan dicatat sebagai pelanggaran.');
+    return;
+  }
+  GUARD.absenSingkat = [];
+  UJIAN.urutanKeluarTab += 1;
+  UJIAN.tabKeluarAktif = true;
+  UJIAN.pelanggaranPindahTab = Math.min(3, Number(UJIAN.pelanggaranPindahTab || 0) + 1);
+  document.getElementById('violationCount').textContent = UJIAN.pelanggaranPindahTab;
+  reportViolation('pindah_tab',
+    'Berulang kali meninggalkan tampilan soal dalam waktu singkat (' + maks + ' kali dalam 3 menit).',
+    'tab-' + UJIAN.urutanKeluarTab + '-' + Date.now());
+}
+
+/** Membatalkan pemantauan absen (dipakai saat ujian berakhir). */
 function batalTenggangLayarMati_() {
   if (UJIAN.layarMatiTimer) {
     clearTimeout(UJIAN.layarMatiTimer);
     UJIAN.layarMatiTimer = null;
   }
+  if (GUARD.splitUlangTimer) {
+    clearTimeout(GUARD.splitUlangTimer);
+    GUARD.splitUlangTimer = null;
+  }
+  GUARD.absenAktif = null;
+  GUARD.splitBerturut = 0;
 }
 
 function checkSplitScreen() {
-  if (!UJIAN.aktif || UJIAN.jeda || isTextEditing()) return;
+  if (!UJIAN.aktif || UJIAN.jeda || document.hidden || isTextEditing()) return;
   var screenWidth = Math.max(window.screen.width || 0, window.screen.availWidth || 0);
   var screenHeight = Math.max(window.screen.height || 0, window.screen.availHeight || 0);
   if (!screenWidth || !screenHeight) return;
+  if (isMobileDevice()) {
+    periksaSplitMobile_(screenWidth, screenHeight);
+    return;
+  }
   var narrow = window.innerWidth / screenWidth < 0.72;
   var short = window.innerHeight / screenHeight < 0.67;
   if (narrow || short) reportViolation('split_screen', 'Ukuran jendela mengindikasikan split screen atau jendela diperkecil.');
+}
+
+/**
+ * Split screen / jendela mengambang pada Android (REVISI 3.5).
+ *
+ * Sebelumnya perangkat mobile dilewati sama sekali, padahal mode layar terbagi
+ * adalah celah menyontek paling mudah di HP. Ambangnya sengaja longgar dan
+ * harus bertahan dua kali pemeriksaan supaya papan ketik virtual, bilah alamat
+ * yang muncul-hilang, dan perangkat lipat tidak salah dihukum.
+ */
+function periksaSplitMobile_(lebarLayar, tinggiLayar) {
+  var vv = window.visualViewport;
+  // Papan ketik virtual sedang terbuka: tinggi visual jauh di bawah tinggi layout.
+  if (vv && vv.height && window.innerHeight && (vv.height / window.innerHeight) < 0.75) return;
+  var rasioLebar = window.innerWidth / lebarLayar;
+  var rasioTinggi = window.innerHeight / tinggiLayar;
+  if (rasioLebar >= 0.72 && rasioTinggi >= 0.55) {
+    GUARD.splitBerturut = 0;
+    return;
+  }
+  GUARD.splitBerturut += 1;
+  if (GUARD.splitBerturut < 2) {
+    // Pastikan sekali lagi setelah tampilan stabil sebelum menghukum.
+    if (GUARD.splitUlangTimer) clearTimeout(GUARD.splitUlangTimer);
+    GUARD.splitUlangTimer = window.setTimeout(function() {
+      GUARD.splitUlangTimer = null;
+      checkSplitScreen();
+    }, 1500);
+    return;
+  }
+  GUARD.splitBerturut = 0;
+  peringatanRingan_('Mode layar terbagi terdeteksi. Gunakan satu aplikasi penuh untuk ujian.');
+  reportViolation('split_screen', 'Layar terbagi (split screen) atau jendela mengambang terdeteksi pada perangkat mobile.');
 }
 
 function retryPendingViolationEvents_() {
@@ -2406,6 +2567,8 @@ function requestFullscreenSafe(dariGestur) {
     UJIAN.fullscreenActivated = true;
     UJIAN.fullscreenRestorePending = false;
     sembunyikanGerbangLayarPenuh_();
+    // Kunci orientasi hanya diizinkan Android SETELAH masuk layar penuh.
+    if (isMobileDevice()) lockPortraitIfSupported();
     return true;
   };
   var gagal = function() {
@@ -2635,4 +2798,4 @@ function urlGambarTampil_(url, lebar) {
   return 'https://drive.google.com/thumbnail?id=' + id + '&sz=w' + (lebar || 1600);
 }
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a34552410f4491b7',t:'MTc4ODI3NjY3OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a34590a37e58b251',t:'MTc4ODI3OTIzNQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
