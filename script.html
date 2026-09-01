@@ -1644,8 +1644,48 @@ var GUARD = {
   jumlahTombolKembali: 0,
   toastRinganTimer: null,
   displayMediaDibungkus: false,
+  pendengarPembungkus: false,
+  peringatanCadangan: {},
   KEY_KELUAR_PAKSA: 'ao_keluar_paksa_v1'
 };
+
+/* ---------- JEMBATAN KE PEMBUNGKUS (GitHub Pages) ---------- */
+/**
+ * Halaman ujian berjalan di dalam bingkai lintas domain. Sebagian kejadian
+ * hanya terjadi di jendela induk (menutup tab, tombol cetak saat fokus di luar
+ * bingkai, tombol kembali jendela induk), sehingga pembungkus perlu tahu kapan
+ * ujian berlangsung dan perlu bisa melaporkan pelanggaran ke sini.
+ */
+function kabariPembungkus_(status) {
+  if (!adaPembungkus_()) return;
+  try {
+    window.parent.postMessage({ sumber: 'siado', aksi: 'ujian', status: status }, '*');
+  } catch (error) {}
+}
+
+/** Asal (origin) pembungkus resmi; pesan dari asal lain diabaikan. */
+function asalPembungkus_() {
+  try {
+    if (typeof APP_PUBLIC_URL !== 'string' || !APP_PUBLIC_URL) return '';
+    return new URL(APP_PUBLIC_URL).origin;
+  } catch (error) { return ''; }
+}
+
+function pasangPendengarPembungkus_() {
+  if (GUARD.pendengarPembungkus) return;
+  GUARD.pendengarPembungkus = true;
+  window.addEventListener('message', function(event) {
+    if (!event || !event.data || event.data.sumber !== 'siado-pembungkus') return;
+    var asalSah = asalPembungkus_();
+    if (asalSah && String(event.origin || '') !== asalSah) return;
+    if (!UJIAN.aktif) return;
+    if (event.data.aksi === 'pelanggaran') {
+      var jenis = String(event.data.jenis || 'pindah_tab');
+      if (jenis === 'screenshot') aktifkanPerisaiLayar_('Tangkapan layar diblokir.');
+      reportViolation(jenis, String(event.data.detail || 'Pelanggaran terdeteksi pada jendela pembungkus.'));
+    }
+  });
+}
 
 /* ---------------------- UTILITAS LAYAR PENUH ---------------------- */
 function fullscreenDidukung_() {
@@ -1665,6 +1705,8 @@ function aktifkanModeUjianAman_() {
   document.body.classList.add('ujian-berlangsung');
   pasangPerangkapTombolKembali_();
   pasangBlokirRekamLayar_();
+  pasangPendengarPembungkus_();
+  kabariPembungkus_('mulai');
   mulaiPengawasLayarPenuh_();
   laporKeluarPaksaTertunda_();
   requestFullscreenSafe();
@@ -1672,6 +1714,8 @@ function aktifkanModeUjianAman_() {
 
 /** Dilepas saat ujian selesai/diskualifikasi/logout (dari stopExamLoops). */
 function matikanModeUjianAman_() {
+  kabariPembungkus_('selesai');
+  Object.keys(GUARD.peringatanCadangan).forEach(batalkanPeringatanCadangan_);
   document.body.classList.remove('ujian-berlangsung');
   hentikanPengawasLayarPenuh_();
   sembunyikanGerbangLayarPenuh_();
@@ -1732,6 +1776,42 @@ function samarkanKontenUjian_(samarkan) {
   document.body.classList.toggle('konten-disamarkan', nyalakan);
   var veil = document.getElementById('privacyVeil');
   if (veil) veil.setAttribute('aria-hidden', nyalakan ? 'false' : 'true');
+}
+
+/**
+ * Pesan peringatan yang WAJIB dilihat peserta untuk jenis pelanggaran berikut.
+ *
+ * REVISI 3.4b: sebelumnya peringatan hanya muncul bila server sempat membalas.
+ * Bila jaringan lambat/putus, percobaan tangkapan layar berlalu tanpa
+ * peringatan apa pun. Sekarang selalu ada peringatan lokal sebagai cadangan.
+ */
+var PESAN_PERINGATAN_LOKAL = {
+  screenshot: 'PERINGATAN! Tangkapan layar atau pencetakan halaman ujian terdeteksi. ' +
+    'Tindakan ini dilarang, telah dicatat sebagai pelanggaran, dan dilaporkan kepada pengawas.',
+  rekam_layar: 'PERINGATAN! Perekaman atau pembagian layar terdeteksi. ' +
+    'Tindakan ini dilarang dan telah dicatat sebagai pelanggaran.',
+  devtools: 'PERINGATAN! Percobaan membuka alat pengembang browser terdeteksi dan dicatat sebagai pelanggaran.',
+  keluar_aplikasi: 'PERINGATAN! Anda terdeteksi menutup atau meninggalkan aplikasi ujian. ' +
+    'Kejadian ini telah dicatat sebagai pelanggaran.',
+  tombol_kembali: 'PERINGATAN! Tombol kembali browser dinonaktifkan selama ujian. ' +
+    'Percobaan ini dicatat sebagai pelanggaran.'
+};
+
+/** Menjamin peserta tetap mendapat peringatan walau server belum membalas. */
+function jadwalkanPeringatanCadangan_(jenis) {
+  var pesan = PESAN_PERINGATAN_LOKAL[jenis];
+  if (!pesan || GUARD.peringatanCadangan[jenis]) return;
+  GUARD.peringatanCadangan[jenis] = window.setTimeout(function() {
+    delete GUARD.peringatanCadangan[jenis];
+    if (!UJIAN.aktif) return;
+    enqueueViolationWarning_(pesan);
+  }, 3200);
+}
+
+function batalkanPeringatanCadangan_(jenis) {
+  if (!GUARD.peringatanCadangan[jenis]) return;
+  window.clearTimeout(GUARD.peringatanCadangan[jenis]);
+  delete GUARD.peringatanCadangan[jenis];
 }
 
 function aktifkanPerisaiLayar_(pesan, durasiMs) {
@@ -2217,6 +2297,10 @@ function showNextViolationWarning_() {
   // Gerbang layar penuh disingkirkan agar tombol "Saya Mengerti" bisa ditekan;
   // tombol itulah yang mengembalikan layar penuh dengan gesture sah.
   sembunyikanGerbangLayarPenuh_();
+  // REVISI 3.4b: perisai tangkapan layar juga ditutup, kalau tidak notifikasi
+  // peringatan tertutup layar hitam dan peserta tidak melihat apa pun.
+  window.clearTimeout(GUARD.shieldTimer);
+  sembunyikanPerisaiLayar_();
   samarkanKontenUjian_(false);
   document.getElementById('warningText').textContent = UJIAN.warningQueue.shift();
   showModal('warningModal');
@@ -2238,11 +2322,16 @@ function reportViolation(jenis, detail, eventId, isRetry) {
     UJIAN.cooldown[jenis] = true;
     setTimeout(function() { delete UJIAN.cooldown[jenis]; }, 4200);
   }
+  // Peringatan lokal disiapkan lebih dulu; dibatalkan begitu server membalas
+  // dengan pesan resminya sehingga peserta tidak menerima dua notifikasi.
+  jadwalkanPeringatanCadangan_(jenis);
+
   apiPeserta('catatPelanggaran', Object.assign(credentialSesi(), {
     jenis: jenis,
     detail: detail,
     eventId: eventId || ''
   })).then(function(result) {
+    batalkanPeringatanCadangan_(jenis);
     if (!result.success) {
       handleExamErrorResult(result);
       return;
@@ -2267,7 +2356,8 @@ function reportViolation(jenis, detail, eventId, isRetry) {
       var tabCount = Math.max(1, Number(result.jumlahPindahTab || UJIAN.pelanggaranPindahTab || 1));
       warningMessage = 'Peringatan pindah tab ke-' + tabCount + ' dari 3. ' + Math.max(0, 3 - tabCount) + ' kesempatan tersisa.';
     }
-    enqueueViolationWarning_(warningMessage || 'Pelanggaran keamanan terdeteksi.');
+    if (!warningMessage) warningMessage = PESAN_PERINGATAN_LOKAL[jenis] || 'Pelanggaran keamanan terdeteksi.';
+    enqueueViolationWarning_(warningMessage);
   }).catch(function(error) {
     console.warn('Pelanggaran belum terkirim:', error);
   });
@@ -2545,4 +2635,4 @@ function urlGambarTampil_(url, lebar) {
   return 'https://drive.google.com/thumbnail?id=' + id + '&sz=w' + (lebar || 1600);
 }
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3451483fdfcff83',t:'MTc4ODI3NDE1MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a34552410f4491b7',t:'MTc4ODI3NjY3OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
