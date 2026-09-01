@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>SIADO V3.3</title>
+  <title>SIADO V3.4</title>
 
   <meta name="description" content="Aplikasi Ujian Online SMP Labschool Untad Palu." />
   <meta name="theme-color" content="#0f172a" />
@@ -63,6 +63,44 @@
       animation: putar 1s linear infinite;
     }
     @keyframes putar { to { transform: rotate(360deg); } }
+
+    /* ================================================================
+     * REVISI 3.4 - LAPISAN KEAMANAN PADA PEMBUNGKUS
+     * Bingkai aplikasi berbeda domain, sehingga sebagian kejadian
+     * (menutup tab, tombol cetak saat fokus di luar bingkai, tombol
+     * kembali jendela induk) HANYA dapat ditangani di halaman ini.
+     * ================================================================ */
+    /* Tidak ada teks pembungkus yang bisa diseleksi/diklik kanan. */
+    body { -webkit-user-select: none; -moz-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+    /* Perisai hitam saat percobaan tangkapan layar / cetak. */
+    #perisai {
+      position: fixed; inset: 0; z-index: 9999; display: none;
+      background: #04070d; color: #fff; text-align: center;
+      align-items: center; justify-content: center; padding: 26px;
+      font: 500 15px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    #perisai.tampil { display: flex; }
+    #perisai h2 { font-size: 21px; font-weight: 800; margin: 0 0 10px; }
+    #perisai p { margin: 0 auto; max-width: 380px; color: #ffd9d9; }
+    #perisai small { display: block; margin-top: 10px; color: #93a7bd; }
+
+    /* Isi bingkai disamarkan saat jendela ditinggalkan (lapisan kedua; */
+    /* aplikasi di dalam bingkai juga melakukan hal yang sama).          */
+    body.samarkan .iframe-container { filter: blur(24px) grayscale(.5) brightness(.7); }
+    body.samarkan .iframe-container::after {
+      content: ""; position: absolute; inset: 0; background: rgba(6, 20, 36, .55);
+    }
+
+    /* Mencetak halaman pembungkus tidak menghasilkan isi soal. */
+    @media print {
+      body > * { display: none !important; }
+      body::before {
+        display: block !important;
+        content: "Mencetak atau menyimpan halaman ujian tidak diizinkan. Aktivitas ini tercatat sebagai pelanggaran.";
+        font: 700 16px/1.6 sans-serif; color: #000; padding: 40px; text-align: center;
+      }
+    }
   </style>
 </head>
 <body>
@@ -73,6 +111,17 @@
   </div>
 
   <div class="iframe-container">
+    <!--
+      REVISI 3.4 - IZIN BINGKAI DIPERKETAT.
+      Sebelumnya bingkai diberi izin "camera; microphone; display-capture;
+      geolocation; clipboard-read". Izin display-capture JUSTRU MENGIZINKAN
+      perekaman/berbagi layar dari dalam halaman ujian, dan clipboard-read
+      memungkinkan isi papan klip dibaca. Ketiganya tidak dipakai aplikasi
+      ujian, sehingga dicabut. Yang tersisa:
+        - fullscreen      : wajib, agar mode layar penuh peserta berfungsi.
+        - clipboard-write : dipakai untuk MENGOSONGKAN papan klip setelah
+                            percobaan tangkapan layar.
+    -->
     <iframe
       id="app"
       title="Aplikasi Ujian Online"
@@ -80,8 +129,17 @@
       allowfullscreen
       webkitallowfullscreen="true"
       mozallowfullscreen="true"
-      allow="fullscreen; camera; microphone; display-capture; geolocation; clipboard-read; clipboard-write">
+      referrerpolicy="no-referrer"
+      allow="fullscreen; clipboard-write">
     </iframe>
+  </div>
+
+  <div id="perisai" aria-hidden="true">
+    <div>
+      <h2>Tangkapan Layar Diblokir</h2>
+      <p id="perisaiTeks">Tangkapan layar dan pencetakan halaman ujian tidak diizinkan.</p>
+      <small>Aktivitas ini dicatat sebagai pelanggaran dan dilaporkan ke pengawas.</small>
+    </div>
   </div>
 
   <script>
@@ -89,12 +147,20 @@
       // ================================================================
       // Ganti baris ini bila Deploy menghasilkan URL /exec yang baru.
       // ================================================================
-      var URL_APLIKASI = 'https://script.google.com/macros/s/AKfycbyEVa816wIaHMxKH2M6QEANKTVFfq7pyqalv1eGVhy9fv-7z2AsEm41VkNJ8YJzBvyQ3Q/exec';
+      var URL_APLIKASI = 'https://script.google.com/macros/s/AKfycbxBRrg6c56vNBbCUt0zpm_5OQ6IU3duehd6ZZF77z8TJWMNlJnmnFBxUGXsEMeNyy0o_w/exec';
 
       var ASAL_APLIKASI = 'https://script.google.com';
       var bingkai = document.getElementById('app');
       var tirai = document.getElementById('memuat');
       var pesan = document.getElementById('pesanMuat');
+      var perisai = document.getElementById('perisai');
+      var perisaiTeks = document.getElementById('perisaiTeks');
+
+      // Status ujian dikirim aplikasi lewat postMessage ('mulai' / 'selesai').
+      var ujianBerlangsung = false;
+      var perisaiTimer = null;
+      var toastTimer = null;
+      var jumlahTombolKembali = 0;
 
       /** Menyusun alamat aplikasi lengkap dengan parameternya. */
       function alamatAplikasi(halaman, kode) {
@@ -112,6 +178,152 @@
 
       function sembunyikanTirai() { tirai.classList.add('sembunyi'); }
 
+      /* ============================================================
+       * KOMUNIKASI DENGAN APLIKASI DI DALAM BINGKAI
+       * ============================================================ */
+
+      /** Mengirim perintah/laporan ke aplikasi ujian di dalam bingkai. */
+      function kirimKeAplikasi(data) {
+        try {
+          if (bingkai && bingkai.contentWindow) {
+            bingkai.contentWindow.postMessage(
+              Object.assign({ sumber: 'siado-pembungkus' }, data || {}), '*');
+          }
+        } catch (error) {}
+      }
+
+      /** Melaporkan pelanggaran yang terdeteksi pembungkus agar dicatat server. */
+      function laporPelanggaran(jenis, detail) {
+        if (!ujianBerlangsung) return;
+        kirimKeAplikasi({ aksi: 'pelanggaran', jenis: jenis, detail: detail });
+      }
+
+      /* ============================================================
+       * PERISAI TANGKAPAN LAYAR & PENYAMARAN ISI BINGKAI
+       * ============================================================ */
+      function tampilkanPerisai(teks) {
+        if (teks) perisaiTeks.textContent = teks;
+        perisai.classList.add('tampil');
+        perisai.setAttribute('aria-hidden', 'false');
+        window.clearTimeout(perisaiTimer);
+        perisaiTimer = window.setTimeout(function () {
+          perisai.classList.remove('tampil');
+          perisai.setAttribute('aria-hidden', 'true');
+        }, 1600);
+        // Papan klip ditimpa agar hasil tangkapan tidak dapat ditempel.
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(' ').catch(function () {});
+          }
+        } catch (error) {}
+      }
+
+      function samarkanBingkai(samarkan) {
+        document.body.classList.toggle('samarkan', !!samarkan && ujianBerlangsung);
+      }
+
+      /* ============================================================
+       * BLOKIR KELUAR DARI APLIKASI / BROWSER
+       * Bingkai Apps Script berbeda domain; dialog konfirmasi dari dalam
+       * bingkai sering diabaikan browser. Penjaga di jendela induk inilah
+       * yang menahan penutupan tab/jendela selama ujian berlangsung.
+       * ============================================================ */
+      window.addEventListener('beforeunload', function (ev) {
+        if (!ujianBerlangsung) return;
+        var teks = 'Ujian masih berlangsung. Keluar sekarang dicatat sebagai pelanggaran.';
+        ev.preventDefault();
+        ev.returnValue = teks;
+        return teks;
+      });
+
+      // Tombol kembali (back) jendela induk dilumpuhkan selama ujian.
+      try {
+        window.history.pushState({ siado: 1 }, document.title, window.location.href);
+      } catch (error) {}
+      window.addEventListener('popstate', function () {
+        if (!ujianBerlangsung) return;
+        try {
+          window.history.pushState({ siado: 1 }, document.title, window.location.href);
+        } catch (error) {}
+        jumlahTombolKembali += 1;
+        if (jumlahTombolKembali > 1) {
+          laporPelanggaran('tombol_kembali', 'Tombol kembali browser ditekan pada halaman pembungkus.');
+        }
+      });
+
+      /* ============================================================
+       * BLOKIR TANGKAPAN LAYAR, CETAK, DEVTOOLS, DAN TAB BARU
+       * Berlaku ketika fokus keyboard sedang berada di jendela induk
+       * (di luar bingkai) - kondisi yang tidak terjangkau aplikasi.
+       * ============================================================ */
+      function tanganiTombol(ev) {
+        if (!ujianBerlangsung) return;
+        var key = String(ev.key || '').toLowerCase();
+        var ctrl = !!(ev.ctrlKey || ev.metaKey);
+
+        var printScreen = ev.key === 'PrintScreen' || key === 'printscreen' || ev.keyCode === 44;
+        var snipWindows = ev.shiftKey && ev.metaKey && key === 's';
+        var snipMac = ev.metaKey && ev.shiftKey && ['3', '4', '5'].indexOf(key) !== -1;
+        var cetak = ctrl && key === 'p';
+        if (printScreen || snipWindows || snipMac || cetak) {
+          ev.preventDefault();
+          tampilkanPerisai(cetak ? 'Mencetak halaman ujian diblokir.' : 'Tangkapan layar diblokir.');
+          laporPelanggaran('screenshot', cetak ?
+            'Percobaan mencetak halaman ujian (jendela pembungkus).' :
+            'Shortcut tangkapan layar pada jendela pembungkus.');
+          return;
+        }
+        if (ev.key === 'F12' || (ctrl && ev.shiftKey && ['i', 'j', 'c', 'k'].indexOf(key) !== -1) ||
+            (ctrl && key === 'u')) {
+          ev.preventDefault();
+          laporPelanggaran('devtools', 'Percobaan membuka alat pengembang pada jendela pembungkus.');
+          return;
+        }
+        // Tab/jendela baru, pindah tab, baris alamat, dan navigasi riwayat.
+        if ((ctrl && ['t', 'n', 'w', 'q', 's', 'l', 'o', 'h', 'd'].indexOf(key) !== -1) ||
+            (ctrl && (key === 'tab' || key === 'pageup' || key === 'pagedown')) ||
+            (ctrl && /^[1-9]$/.test(key)) ||
+            (ev.altKey && (key === 'arrowleft' || key === 'arrowright' || key === 'd')) ||
+            ev.key === 'F6' || ev.key === 'F3') {
+          ev.preventDefault();
+          return;
+        }
+        // Muat ulang: dicegah agar sesi ujian tidak terputus paksa.
+        if (ev.key === 'F5' || (ctrl && key === 'r')) {
+          ev.preventDefault();
+          return;
+        }
+      }
+      window.addEventListener('keydown', tanganiTombol, true);
+      window.addEventListener('keyup', function (ev) {
+        if (!ujianBerlangsung) return;
+        if (ev.key === 'PrintScreen' || String(ev.key || '').toLowerCase() === 'printscreen' || ev.keyCode === 44) {
+          ev.preventDefault();
+          tampilkanPerisai('Tangkapan layar diblokir.');
+          laporPelanggaran('screenshot', 'Tombol PrintScreen pada jendela pembungkus.');
+        }
+      }, true);
+
+      window.addEventListener('beforeprint', function () {
+        if (!ujianBerlangsung) return;
+        tampilkanPerisai('Mencetak halaman ujian diblokir.');
+        laporPelanggaran('screenshot', 'Percobaan mencetak halaman dari menu browser (pembungkus).');
+      });
+
+      document.addEventListener('contextmenu', function (ev) {
+        if (ujianBerlangsung) ev.preventDefault();
+      }, true);
+      document.addEventListener('dragstart', function (ev) {
+        if (ujianBerlangsung) ev.preventDefault();
+      }, true);
+
+      // Jendela ditinggalkan: isi bingkai disamarkan (lapisan kedua).
+      document.addEventListener('visibilitychange', function () {
+        samarkanBingkai(document.hidden);
+      });
+      window.addEventListener('blur', function () { samarkanBingkai(true); });
+      window.addEventListener('focus', function () { samarkanBingkai(false); });
+
       // --- Muat halaman awal -------------------------------------------
       // Parameter page/hs tetap didukung agar tautan lama tidak rusak,
       // tetapi TIDAK diperlukan: pemilihan guru/proktor dilakukan lewat
@@ -122,7 +334,7 @@
 
       bingkai.src = alamatAplikasi(halamanAwal, kodeAwal);
       if (halamanAwal === 'admin') {
-        document.title = 'Kelola Ujian | SIADO V3.3';
+        document.title = 'Kelola Ujian | SIADO V3.4';
         pesan.textContent = 'Memuat Kelola Ujian\u2026';
       }
 
@@ -134,18 +346,32 @@
           window.location.pathname + (sisa ? '?' + sisa : ''));
       }
 
-      // --- Perpindahan halaman atas permintaan aplikasi ------------------
+      // --- Pesan dari aplikasi di dalam bingkai --------------------------
       // Aplikasi di dalam bingkai tidak dapat menavigasi jendela induk karena
       // beda domain. Karena itu aplikasi cukup mengirim pesan, dan pembungkus
       // yang mengganti isi bingkainya sendiri.
       window.addEventListener('message', function (ev) {
         if (!ev || !ev.data || ev.data.sumber !== 'siado') return;
         if (String(ev.origin || '').indexOf(ASAL_APLIKASI) !== 0) return;
+
+        // REVISI 3.4: status ujian menghidupkan/mematikan penjaga keamanan.
+        if (ev.data.aksi === 'ujian') {
+          ujianBerlangsung = String(ev.data.status || '') === 'mulai';
+          if (!ujianBerlangsung) {
+            jumlahTombolKembali = 0;
+            samarkanBingkai(false);
+          }
+          return;
+        }
+
         if (ev.data.aksi !== 'pindah') return;
 
         var keAdmin = ev.data.halaman === 'admin';
+        // Berpindah ke panel = keluar dari ruang ujian secara sah.
+        ujianBerlangsung = false;
+        samarkanBingkai(false);
         tampilkanTirai(keAdmin ? 'Membuka Kelola Ujian\u2026' : 'Membuka halaman ujian\u2026');
-        document.title = keAdmin ? 'Kelola Ujian | SIADO V3.3' : 'SIADO V3.3';
+        document.title = keAdmin ? 'Kelola Ujian | SIADO V3.4' : 'SIADO V3.4';
 
         // Alamat dari aplikasi dipakai hanya bila benar menunjuk ke Apps Script.
         var tujuan = String(ev.data.url || '');
@@ -157,5 +383,5 @@
       window.setTimeout(sembunyikanTirai, 10000); // jaring pengaman
     })();
   </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2b9b2035f2b0a9d',t:'MTc4NjgxMjU5NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>
