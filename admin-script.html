@@ -295,6 +295,7 @@ function bindAdminInterface() {
   document.getElementById('refreshPelanggaran').addEventListener('click', buatRefresh_('Data pelanggaran', loadViolations));
   bindClick_('refreshDiskualifikasi', buatRefresh_('Daftar diskualifikasi', loadDisqualified));
   bindClick_('pulihkanSemuaDq', pulihkanSemuaPeserta);
+  bindClick_('resetDataDq', resetDataDiskualifikasi);
   document.getElementById('refreshHasil').addEventListener('click', buatRefresh_('Hasil ujian', loadResults));
   document.getElementById('refreshUraian').addEventListener('click', buatRefresh_('Nilai uraian', loadEssays));
   document.getElementById('refreshRekap').addEventListener('click', buatRefresh_('Rekap kelas', loadRecap));
@@ -2077,6 +2078,26 @@ async function pulihkanPeserta(identityKey, nama) {
     ]);
   } catch (error) {
     await hasilGagal_('Pemulihan Gagal', error.message || 'Pemulihan peserta gagal diproses.');
+  }
+}
+
+/** Hapus SEMUA catatan diskualifikasi sekaligus (daftar + blokir bersih). */
+async function resetDataDiskualifikasi() {
+  var setuju = await konfirmasi_(
+    'SEMUA catatan diskualifikasi akan dihapus permanen (daftar + blokir). ' +
+    'Sesi peserta yang masih terblokir dikembalikan ke JEDA dengan waktu penuh. ' +
+    'Tindakan ini TIDAK bisa dibatalkan.',
+    { judul: 'Reset Data Diskualifikasi', nada: 'danger', teksOk: 'Ya, Reset Data' });
+  if (!setuju) return;
+  try {
+    var result = await apiWajib_('resetDataDiskualifikasi', {});
+    await segarkanSenyap_([loadDisqualified, loadMonitor]);
+    await hasilSukses_('Reset Data Selesai', result.message || 'Data diskualifikasi berhasil di-reset.', [
+      { label: 'Catatan dihapus', nilai: String(result.jumlahCatatan !== undefined ? result.jumlahCatatan : '-') },
+      { label: 'Sesi dikembalikan', nilai: String(result.jumlahSesi !== undefined ? result.jumlahSesi : '-') }
+    ]);
+  } catch (error) {
+    await hasilGagal_('Reset Data Gagal', error.message || 'Reset data diskualifikasi gagal diproses.');
   }
 }
 
@@ -4292,4 +4313,4 @@ function escapeAdmin(value) { return String(value === undefined || value === nul
 function readFileAsDataUrl(file) { return new Promise(function(resolve, reject) { var reader = new FileReader(); reader.onload = function() { resolve(reader.result); }; reader.onerror = reject; reader.readAsDataURL(file); }); }
 function debounce(fn, wait) { var timeout; return function() { var args = arguments; clearTimeout(timeout); timeout = setTimeout(function() { fn.apply(null, args); }, wait); }; }
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a342df30db4bd4a5',t:'MTc4ODI1MDk5NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a34440bfca225724',t:'MTc4ODI2NTQ3Nw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
