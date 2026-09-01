@@ -64,6 +64,27 @@
     .admin-pane-sub{margin:0 0 18px;font-size:12.5px;color:#6b8298;line-height:1.55}
     .role-locked{display:none!important}
 
+    /* ============================================================
+     * REVISI 3.4b - PEMILIH TEMA YANG TERLIHAT
+     * Sebelumnya hanya ada <select> kosong sehingga tidak ada yang
+     * tampak di layar. Sekarang 5 tema ditampilkan sebagai kartu
+     * warna yang bisa diklik; <select> tetap ada sebagai cadangan
+     * bila JavaScript gagal dimuat.
+     * ============================================================ */
+    .tema-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:11px;margin:4px 0 14px}
+    .tema-chip{position:relative;display:flex;align-items:center;gap:11px;padding:11px 12px;border:2px solid #dce5ef;
+      border-radius:13px;background:#fff;cursor:pointer;text-align:left;transition:border-color .15s ease,box-shadow .15s ease,transform .12s ease}
+    .tema-chip:hover{border-color:#8ebcf2;transform:translateY(-1px);box-shadow:0 8px 18px rgba(32,61,88,.10)}
+    .tema-chip.aktif{border-color:var(--tema-warna,#1f6feb);box-shadow:0 0 0 3px color-mix(in srgb,var(--tema-warna,#1f6feb) 18%,transparent)}
+    .tema-chip .tema-bulat{width:34px;height:34px;border-radius:50%;flex:0 0 34px;
+      background:linear-gradient(135deg,var(--tema-warna,#1f6feb),var(--tema-gelap,#0b1f36));box-shadow:inset 0 0 0 2px rgba(255,255,255,.6)}
+    .tema-chip .tema-teks{display:flex;flex-direction:column;gap:2px;min-width:0}
+    .tema-chip .tema-nama{font:800 12.5px var(--heading);color:#102a43;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .tema-chip .tema-status{font-size:10.5px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:#8398ad}
+    .tema-chip.aktif .tema-status{color:var(--tema-warna,#1f6feb)}
+    .tema-chip .tema-centang{position:absolute;top:7px;right:9px;font-size:12px;color:var(--tema-warna,#1f6feb);opacity:0}
+    .tema-chip.aktif .tema-centang{opacity:1}
+
     /* Media uploader kelola soal */
     .media-box{border:1px solid #dbe6f0;border-radius:13px;padding:14px;background:#fbfdff;margin-top:6px}
     .media-box-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:11px;flex-wrap:wrap}
@@ -679,11 +700,24 @@
 
             <article class="admin-card" data-admin="true">
               <div class="admin-card-head"><div><h2><i class="fa-solid fa-palette"></i> Tema Tampilan Aplikasi</h2><p>Pilih salah satu dari 5 tema profesional. Berlaku langsung untuk halaman login, ruang ujian peserta, dan panel ini.</p></div></div>
+              <!-- Kartu warna: pilihan tema yang langsung terlihat dan dapat diklik. -->
+              <div id="temaGrid" class="tema-grid" role="radiogroup" aria-label="Pilihan tema tampilan"></div>
               <div class="inline-row">
-                <div class="admin-field"><label for="sTema">Tema</label><select id="sTema" class="admin-input"></select></div>
+                <div class="admin-field">
+                  <label for="sTema">Tema</label>
+                  <!-- REVISI 3.4b: opsi ditulis langsung di HTML sebagai cadangan,
+                       sehingga 5 tema tetap muncul walau JavaScript gagal dimuat. -->
+                  <select id="sTema" class="admin-input">
+                    <option value="navy">Navy Profesional</option>
+                    <option value="emerald">Emerald Modern</option>
+                    <option value="royal">Royal Violet</option>
+                    <option value="ocean">Ocean Teal</option>
+                    <option value="sunset">Sunset Coral</option>
+                  </select>
+                </div>
                 <button id="btnSimpanTema" class="admin-primary" type="button"><i class="fa-solid fa-palette"></i> Terapkan Tema</button>
               </div>
-              <small>Tema berlaku untuk halaman login, ruang ujian peserta, dan panel ini. Pilihan tersimpan pada sheet Pengaturan (kunci <b>Tema_Aplikasi</b>).</small>
+              <small>Klik salah satu kartu warna di atas untuk melihat pratinjau, lalu tekan <b>Terapkan Tema</b> untuk menyimpan. Tema berlaku untuk halaman login, ruang ujian peserta, dan panel ini (tersimpan pada sheet Pengaturan, kunci <b>Tema_Aplikasi</b>).</small>
             </article>
 
             <article class="admin-card" data-admin="true">
@@ -950,5 +984,5 @@
     }, 1500);
   })();
   </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a345175cd96cff83',t:'MTc4ODI3NDI2Nw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a345515c69fe91b7',t:'MTc4ODI3NjY0Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
