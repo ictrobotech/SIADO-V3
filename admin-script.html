@@ -52,7 +52,10 @@ var ADMIN = {
   background: null,
   brandingVersion: '',
   brandingSyncId: null,
-  brandingBusy: false
+  brandingBusy: false,
+  // PERBAIKAN 3.4: tema aktif dan daftar tema dari server (Pengaturan -> Tema).
+  tema: 'navy',
+  daftarTema: []
 };
 
 var TAB_META = {
@@ -173,16 +176,57 @@ var DAFTAR_TEMA_ = [
   { id: 'sunset', nama: 'Sunset Coral' }
 ];
 
+/**
+ * PERBAIKAN 3.4: mengisi menu "Tema" pada Pengaturan.
+ *
+ * Sebelumnya <select id="sTema"> dibiarkan kosong di admin.html dan tidak ada
+ * kode yang mengisinya, sehingga 5 pilihan tema tidak pernah muncul. Daftar
+ * diambil dari server (result.daftarTema) bila tersedia, dengan cadangan
+ * DAFTAR_TEMA_ di sisi panel.
+ */
+function isiPilihanTema_(temaTerpilih) {
+  var pilih = document.getElementById('sTema');
+  if (!pilih) return;
+  var daftar = (ADMIN.daftarTema && ADMIN.daftarTema.length) ? ADMIN.daftarTema : DAFTAR_TEMA_;
+  var aktif = String(temaTerpilih || ADMIN.tema || pilih.value || 'navy').toLowerCase();
+  var adaAktif = daftar.some(function(item) { return String(item.id).toLowerCase() === aktif; });
+  if (!adaAktif) aktif = String(daftar[0].id).toLowerCase();
+  pilih.innerHTML = daftar.map(function(item) {
+    var id = String(item.id || '').toLowerCase();
+    var nama = escapeAdmin(item.nama || id);
+    return '<option value="' + escapeAdmin(id) + '"' + (id === aktif ? ' selected' : '') + '>' + nama + '</option>';
+  }).join('');
+  pilih.value = aktif;
+}
+
+/** Pratinjau tema langsung saat pilihan diganti (belum disimpan ke server). */
+function pratinjauTemaAdmin_() {
+  var pilih = document.getElementById('sTema');
+  if (!pilih || !pilih.value) return;
+  document.documentElement.setAttribute('data-theme', String(pilih.value).toLowerCase());
+}
+
 /** Menyimpan tema pilihan admin ke server dan menerapkannya langsung. */
 async function simpanTemaAdmin_() {
   var pilih = document.getElementById('sTema');
   if (!pilih) return;
+  if (!pilih.value) {
+    isiPilihanTema_();
+    if (!pilih.value) {
+      showToast('Daftar tema belum siap. Muat ulang panel lalu coba lagi.', 'error');
+      return;
+    }
+  }
   try {
     var result = await apiWajib_('simpanTema', { tema: pilih.value });
     ADMIN.tema = result.tema || pilih.value;
+    isiPilihanTema_(ADMIN.tema);
     terapkanTemaPanel_();
     showToast(result.message || 'Tema tampilan diterapkan.', 'success');
   } catch (error) {
+    // Kembalikan tampilan ke tema resmi bila penyimpanan gagal.
+    isiPilihanTema_(ADMIN.tema);
+    terapkanTemaPanel_();
     showToast('Tema gagal disimpan: ' + (error.message || ''), 'error');
   }
 }
@@ -427,6 +471,11 @@ function bindAdminInterface() {
   if (btnResetSatu) btnResetSatu.addEventListener('click', resetWaktuSatuPeserta_);
   var btnResetSemua = document.getElementById('btnResetWaktuSemua');
   if (btnResetSemua) btnResetSemua.addEventListener('click', resetWaktuSemuaPeserta_);
+  // PERBAIKAN 3.4: isi 5 pilihan tema segera saat panel dibuka, lalu
+  // pratinjau langsung ketika pilihan diganti.
+  isiPilihanTema_();
+  var pilihTema = document.getElementById('sTema');
+  if (pilihTema) pilihTema.addEventListener('change', pratinjauTemaAdmin_);
   var btnTema = document.getElementById('btnSimpanTema');
   if (btnTema) btnTema.addEventListener('click', simpanTemaAdmin_);
   document.getElementById('closeEditModal').addEventListener('click', closeEditQuestion);
@@ -1178,6 +1227,8 @@ async function loadAdminBootstrap() {
       terapkanHakAkses_();
     }
     ADMIN.tema = result.tema || ADMIN.tema || 'navy';
+    if (result.daftarTema && result.daftarTema.length) ADMIN.daftarTema = result.daftarTema;
+    isiPilihanTema_(ADMIN.tema);
     terapkanTemaPanel_();
     ADMIN.notifications = result.notifikasi || [];
     applyNotificationBadge_(result.notifikasiBelumDibaca || 0);
@@ -4313,4 +4364,4 @@ function escapeAdmin(value) { return String(value === undefined || value === nul
 function readFileAsDataUrl(file) { return new Promise(function(resolve, reject) { var reader = new FileReader(); reader.onload = function() { resolve(reader.result); }; reader.onerror = reject; reader.readAsDataURL(file); }); }
 function debounce(fn, wait) { var timeout; return function() { var args = arguments; clearTimeout(timeout); timeout = setTimeout(function() { fn.apply(null, args); }, wait); }; }
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a34440bfca225724',t:'MTc4ODI2NTQ3Nw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a34517bb4ea6978e',t:'MTc4ODI3NDI4Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
