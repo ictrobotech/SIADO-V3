@@ -169,12 +169,18 @@ function terapkanTemaPanel_() {
 
 /** Daftar tema profesional yang tersedia di panel. */
 var DAFTAR_TEMA_ = [
-  { id: 'navy', nama: 'Navy Profesional' },
-  { id: 'emerald', nama: 'Emerald Modern' },
-  { id: 'royal', nama: 'Royal Violet' },
-  { id: 'ocean', nama: 'Ocean Teal' },
-  { id: 'sunset', nama: 'Sunset Coral' }
+  { id: 'navy', nama: 'Navy Profesional', warna: '#1f6feb', gelap: '#0b1f36' },
+  { id: 'emerald', nama: 'Emerald Modern', warna: '#0e9f6e', gelap: '#0b3d2e' },
+  { id: 'royal', nama: 'Royal Violet', warna: '#6d28d9', gelap: '#2b1060' },
+  { id: 'ocean', nama: 'Ocean Teal', warna: '#0d9488', gelap: '#083344' },
+  { id: 'sunset', nama: 'Sunset Coral', warna: '#ea580c', gelap: '#431407' }
 ];
+
+/** Warna kartu tema (dipakai bila server tidak mengirim kode warnanya). */
+function warnaTema_(id) {
+  var bawaan = DAFTAR_TEMA_.filter(function(item) { return item.id === String(id).toLowerCase(); })[0];
+  return bawaan || { warna: '#1f6feb', gelap: '#0b1f36' };
+}
 
 /**
  * PERBAIKAN 3.4: mengisi menu "Tema" pada Pengaturan.
@@ -197,13 +203,52 @@ function isiPilihanTema_(temaTerpilih) {
     return '<option value="' + escapeAdmin(id) + '"' + (id === aktif ? ' selected' : '') + '>' + nama + '</option>';
   }).join('');
   pilih.value = aktif;
+  gambarKartuTema_(daftar, aktif);
+}
+
+/**
+ * Menggambar kartu warna tema.
+ *
+ * PERBAIKAN 3.4b: <select> saja ternyata tidak terlihat jelas di panel
+ * (apalagi ketika kosong), sehingga pilihan tema ditampilkan sebagai kartu
+ * warna yang dapat diklik. Kartu dan <select> selalu disinkronkan.
+ */
+function gambarKartuTema_(daftar, aktif) {
+  var wadah = document.getElementById('temaGrid');
+  if (!wadah) return;
+  daftar = (daftar && daftar.length) ? daftar : DAFTAR_TEMA_;
+  aktif = String(aktif || ADMIN.tema || 'navy').toLowerCase();
+  wadah.innerHTML = daftar.map(function(item) {
+    var id = String(item.id || '').toLowerCase();
+    var referensi = warnaTema_(id);
+    var warna = String(item.warna || referensi.warna);
+    var gelap = String(item.gelap || referensi.gelap);
+    var terpilih = id === aktif;
+    return '<button type="button" class="tema-chip' + (terpilih ? ' aktif' : '') + '"' +
+      ' data-tema="' + escapeAdmin(id) + '" role="radio" aria-checked="' + (terpilih ? 'true' : 'false') + '"' +
+      ' style="--tema-warna:' + escapeAdmin(warna) + ';--tema-gelap:' + escapeAdmin(gelap) + '">' +
+      '<span class="tema-bulat"></span>' +
+      '<span class="tema-teks"><span class="tema-nama">' + escapeAdmin(item.nama || id) + '</span>' +
+      '<span class="tema-status">' + (terpilih ? 'Sedang dipakai' : 'Pilih tema') + '</span></span>' +
+      '<i class="fa-solid fa-circle-check tema-centang"></i></button>';
+  }).join('');
+}
+
+/** Klik kartu tema: menyorot pilihan, menyamakan select, dan pratinjau langsung. */
+function pilihKartuTema_(id) {
+  var pilih = document.getElementById('sTema');
+  var tema = String(id || '').toLowerCase();
+  if (!tema) return;
+  if (pilih) pilih.value = tema;
+  gambarKartuTema_((ADMIN.daftarTema && ADMIN.daftarTema.length) ? ADMIN.daftarTema : DAFTAR_TEMA_, tema);
+  document.documentElement.setAttribute('data-theme', tema);
 }
 
 /** Pratinjau tema langsung saat pilihan diganti (belum disimpan ke server). */
 function pratinjauTemaAdmin_() {
   var pilih = document.getElementById('sTema');
   if (!pilih || !pilih.value) return;
-  document.documentElement.setAttribute('data-theme', String(pilih.value).toLowerCase());
+  pilihKartuTema_(pilih.value);
 }
 
 /** Menyimpan tema pilihan admin ke server dan menerapkannya langsung. */
@@ -476,6 +521,12 @@ function bindAdminInterface() {
   isiPilihanTema_();
   var pilihTema = document.getElementById('sTema');
   if (pilihTema) pilihTema.addEventListener('change', pratinjauTemaAdmin_);
+  var gridTema = document.getElementById('temaGrid');
+  if (gridTema) gridTema.addEventListener('click', function(event) {
+    var kartu = event.target && event.target.closest ? event.target.closest('.tema-chip') : null;
+    if (!kartu) return;
+    pilihKartuTema_(kartu.getAttribute('data-tema'));
+  });
   var btnTema = document.getElementById('btnSimpanTema');
   if (btnTema) btnTema.addEventListener('click', simpanTemaAdmin_);
   document.getElementById('closeEditModal').addEventListener('click', closeEditQuestion);
@@ -4364,4 +4415,4 @@ function escapeAdmin(value) { return String(value === undefined || value === nul
 function readFileAsDataUrl(file) { return new Promise(function(resolve, reject) { var reader = new FileReader(); reader.onload = function() { resolve(reader.result); }; reader.onerror = reject; reader.readAsDataURL(file); }); }
 function debounce(fn, wait) { var timeout; return function() { var args = arguments; clearTimeout(timeout); timeout = setTimeout(function() { fn.apply(null, args); }, wait); }; }
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a34517bb4ea6978e',t:'MTc4ODI3NDI4Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a34550667d3291b7',t:'MTc4ODI3NjYwMw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
